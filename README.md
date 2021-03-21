@@ -1,2 +1,2 @@
-# MLSLG
+# MultiSign
 Multi-Lingual Sign-Language Generation
