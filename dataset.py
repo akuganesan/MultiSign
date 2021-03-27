@@ -8,6 +8,8 @@ from torchvision import transforms
 import re
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
 import deepdish as dd
+import skeleton_utils as skel
+import constants as constants
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
@@ -58,19 +60,36 @@ def unpad_sequence(img_sequence, sequence_lens):
     return pack_padded_sequence(img_sequence, sequence_lens, batch_first=True, enforce_sorted=False)
 
 class SIGNUMDataset(Dataset):
-    def __init__(self, dataset_dir, img_size=256, use_pose=False, include_word=False, use_image=True, subsample=30):
+    def __init__(self, dataset_dir, img_size=256, use_pose=False, include_word=False, \
+                 use_image=True, subsample=10, normalize_poses=True, root_joint=1, body="BODY_25"):
         """
         Args:
             dataset_dir (string): Path to SIGNUM dataset.
             img_size (int): Size to crop images to
             pose_sequence (list, optional): path to corresponding pose sequences for each sentence.
             include_word (boolean, default=False): whether or not to include individual words
+            use_image (boolean, default=True): whether or not to load up images
+            subsample (int, default=10): take every n frames from the poses and images
+            normalize_poses (boolean, default=True): whether or not to normalize the poses
+            root_joint (int, default=1): which joint index to center based on
+            body (string, default="BODY_25"): which body model to use
         """
         self.dataset_dir = dataset_dir
         self.include_word = include_word
         self.subsample=subsample
         self.use_image = use_image
         self.use_pose = use_pose
+        self.normalize_poses = normalize_poses
+        self.root_joint = root_joint
+        self.body = body
+        
+        self.mean = None
+        self.std = None
+        
+        if self.body == "BODY_25":
+            self.mean = constants.SAMPLE_MEAN_BODY_25
+            self.std = constants.SAMPLE_STD_BODY_25
+        
         
         if not self.use_image:
             self.collate = collate_noImg_fn
@@ -148,11 +167,25 @@ class SIGNUMDataset(Dataset):
         for i, file_path in enumerate(pose_path):
             if i % self.subsample == 0:
                 pose_dict = dd.io.load(file_path)
+                
                 #TODO: TEMP FIX, CHANGE LATER SO IT'S NOT A DICT
-#                 print(pose_dict)
                 # Ignore the confidence score and only extract the 2D pose
-                pose = torch.FloatTensor(pose_dict['people'][0]['pose_keypoints_2d']).view(-1, 3)[:,:-1] 
-                sequence.append(pose)
+                pose = torch.FloatTensor(pose_dict['people'][0]['pose_keypoints_2d']).view(-1, 3)[:,:-1]
+                lhand = torch.FloatTensor(pose_dict['people'][0]['hand_left_keypoints_2d']).view(-1, 3)[:,:-1]
+                rhand = torch.FloatTensor(pose_dict['people'][0]['hand_right_keypoints_2d']).view(-1, 3)[:,:-1]
+                pose = torch.cat((pose, lhand, rhand), dim=0)
+                
+                # Remove unnecessary joints from the pose and root center it
+                pose, gt_root = skel.root_center_pose(pose, root_joint=self.root_joint)
+                pose = skel.remove_excess_joints(pose)
+                
+                if self.normalize_poses:
+                    # normalize the pose
+                    pose = skel.normalize_pose(pose, self.mean, self.std, root_joint=self.root_joint)
+                    sequence.append(pose)
+                else:
+                    sequence.append(pose)
+                
         return torch.stack(sequence, dim=0), len(sequence)
     
     def __len__(self):
