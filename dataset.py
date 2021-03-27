@@ -7,12 +7,13 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import re
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
+import deepdish as dd
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 # If we want batches then we have to pad the sequence data so that it has the same lengths
-def collate_fn(data_tuple):
+def collate_noPose_fn(data_tuple):
     """
        data: is a list of tuples [img seq, annot eng, annot deu, transl eng, transl deu, seq len] with where 'img_seq' is a tensor of arbitrary shape
              and label/length are scalars
@@ -27,12 +28,37 @@ def collate_fn(data_tuple):
               'seq_len': seq_len
             }
 
+def collate_all_fn(data_tuple):
+    img_seq, pose_seq, annot_eng, annot_deu, transl_eng, transl_deu, seq_len = zip(*data_tuple)
+    padded_img_seqs = pad_sequence(img_seq, batch_first=True)
+    padded_pose_seqs = pad_sequence(pose_seq, batch_first=True)
+    return  { 'img_seq': padded_img_seqs,
+              'pose_seq': padded_pose_seqs,
+              'annot_eng': annot_eng,
+              'annot_deu': annot_deu,
+              'transl_eng': transl_eng,
+              'transl_deu': transl_deu,
+              'seq_len': seq_len
+            }
+
+def collate_noImg_fn(data_tuple):
+    pose_seq, annot_eng, annot_deu, transl_eng, transl_deu, seq_len = zip(*data_tuple)
+    padded_pose_seqs = pad_sequence(pose_seq, batch_first=True)
+    return  {
+              'pose_seq': padded_pose_seqs,
+              'annot_eng': annot_eng,
+              'annot_deu': annot_deu,
+              'transl_eng': transl_eng,
+              'transl_deu': transl_deu,
+              'seq_len': seq_len
+            }
+
 # This function "unpads" the sequences based on the respective input sequence lenghts
 def unpad_sequence(img_sequence, sequence_lens):
     return pack_padded_sequence(img_sequence, sequence_lens, batch_first=True, enforce_sorted=False)
 
 class SIGNUMDataset(Dataset):
-    def __init__(self, dataset_dir, img_size=256, pose_sequence=None, include_word=False):
+    def __init__(self, dataset_dir, img_size=256, use_pose=False, include_word=False, use_image=True, subsample=30):
         """
         Args:
             dataset_dir (string): Path to SIGNUM dataset.
@@ -42,6 +68,17 @@ class SIGNUMDataset(Dataset):
         """
         self.dataset_dir = dataset_dir
         self.include_word = include_word
+        self.subsample=subsample
+        self.use_image = use_image
+        self.use_pose = use_pose
+        
+        if not self.use_image:
+            self.collate = collate_noImg_fn
+        elif not self.use_pose:
+            self.collate = collate_noPose_fn
+        else:
+            self.collate = collate_all_fn
+        
         
         self.transform = transforms.Compose([
             transforms.Resize([img_size,img_size]),
@@ -54,14 +91,23 @@ class SIGNUMDataset(Dataset):
             folder_sep = "*/*/"
             file_sep = "*/*.txt"
         else:
-            folder_sep = "*/con*/"
+            folder_sep = "*/con*[!_h5]/"
             file_sep = "*/con*.txt"
                     
-        self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))
-        self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))
+        # INCLUDED THE [:3] so that the number of pose folders matches the number of img folders
+        self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:3]
+        self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[:3]
         
         # TODO: will be added after running the dataset through OpenPose
-        self.pose_sequence = pose_sequence
+        
+        if self.use_pose:
+            folder_sep = "*/con*_h5/"
+            self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))
+            
+            self.pose_paths = []
+            for folder in self.pose_folders:
+                self.pose_paths.append(sorted(glob.glob(os.path.join(folder, '*'))))
+            
         
         self.sequence_paths = []
         self.text_annotation = []
@@ -90,11 +136,24 @@ class SIGNUMDataset(Dataset):
             Load in a sequence of data; NOTE WE PROBABLY WANT TO SUBSAMPLE THIS!!    
         """
         sequence = []
-        for file_path in sequence_path:
-            image = Image.open(file_path).convert('RGB')
-            image_tensor = self.transform(image).float()
-            sequence.append(image_tensor)
-        return torch.stack(sequence, dim=0), len(sequence_path)
+        for i, file_path in enumerate(sequence_path):
+            if i % self.subsample == 0:
+                image = Image.open(file_path).convert('RGB')
+                image_tensor = self.transform(image).float()
+                sequence.append(image_tensor)
+        return torch.stack(sequence, dim=0), len(sequence)
+    
+    def _load_pose_sequence(self, pose_path):
+        sequence = []
+        for i, file_path in enumerate(pose_path):
+            if i % self.subsample == 0:
+                pose_dict = dd.io.load(file_path)
+                #TODO: TEMP FIX, CHANGE LATER SO IT'S NOT A DICT
+#                 print(pose_dict)
+                # Ignore the confidence score and only extract the 2D pose
+                pose = torch.FloatTensor(pose_dict['people'][0]['pose_keypoints_2d']).view(-1, 3)[:,:-1] 
+                sequence.append(pose)
+        return torch.stack(sequence, dim=0), len(sequence)
     
     def __len__(self):
         return len(self.sentence_folders)
@@ -103,16 +162,38 @@ class SIGNUMDataset(Dataset):
         image_folder = self.sentence_folders[idx]
         sentence_annotation = self.text_annotation[idx]
         sequence_paths = self.sequence_paths[idx]
-
-        image_sequence, sequence_length = self._load_image_sequence(sequence_paths)
+        pose_paths = self.pose_paths[idx]
+        
+        if self.use_image:
+            image_sequence, sequence_length = self._load_image_sequence(sequence_paths)
+        
+        if self.use_pose:
+            pose_sequence, pose_length = self._load_pose_sequence(pose_paths)
+            if self.use_image:
+                assert pose_length == sequence_length       
+                return [image_sequence, 
+                        pose_sequence,
+                        sentence_annotation['annot_eng'],
+                        sentence_annotation['annot_deu'],
+                        sentence_annotation['transl_eng'],
+                        sentence_annotation['transl_deu'],
+                        sequence_length
+                    ]
+            else:
+                return [
+                        pose_sequence,
+                        sentence_annotation['annot_eng'],
+                        sentence_annotation['annot_deu'],
+                        sentence_annotation['transl_eng'],
+                        sentence_annotation['transl_deu'],
+                        sequence_length
+                    ]
             
-        if self.pose_sequence is not None:
-            pose_sequence = self.pose_sequence[idx]
-            
-        return [image_sequence, 
-                sentence_annotation['annot_eng'],
-                sentence_annotation['annot_deu'],
-                sentence_annotation['transl_eng'],
-                sentence_annotation['transl_deu'],
-                sequence_length
-            ]
+        else:
+            return [image_sequence, 
+                    sentence_annotation['annot_eng'],
+                    sentence_annotation['annot_deu'],
+                    sentence_annotation['transl_eng'],
+                    sentence_annotation['transl_deu'],
+                    sequence_length
+                ]
