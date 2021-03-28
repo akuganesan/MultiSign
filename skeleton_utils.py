@@ -49,7 +49,7 @@ def plot_pose2D(ax, pose_2d_1, bones=GLOBAL_BONES, linewidth=2, alpha=0.95, colo
     cmap = plt.get_cmap(colormap)
     pose_2d = pose_2d_1.clone()
     pose_2d = np.reshape(pose_2d.numpy().transpose(), (2, -1))
-    print(pose_2d.shape)
+#     print(pose_2d.shape)
 #     pose_2d[1,:] *= -1
 
     X, Y = np.squeeze(np.array(pose_2d[0, :])), np.squeeze(np.array(pose_2d[1, :]))

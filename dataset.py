@@ -31,11 +31,13 @@ def collate_noPose_fn(data_tuple):
             }
 
 def collate_all_fn(data_tuple):
-    img_seq, pose_seq, annot_eng, annot_deu, transl_eng, transl_deu, seq_len = zip(*data_tuple)
+    img_seq, pose_seq, label_seq, annot_eng, annot_deu, transl_eng, transl_deu, seq_len = zip(*data_tuple)
     padded_img_seqs = pad_sequence(img_seq, batch_first=True)
     padded_pose_seqs = pad_sequence(pose_seq, batch_first=True)
+    padded_label_seq = pad_sequence(label_seq, batch_first=True)
     return  { 'img_seq': padded_img_seqs,
               'pose_seq': padded_pose_seqs,
+              'label_seq': padded_label_seq,
               'annot_eng': annot_eng,
               'annot_deu': annot_deu,
               'transl_eng': transl_eng,
@@ -44,10 +46,12 @@ def collate_all_fn(data_tuple):
             }
 
 def collate_noImg_fn(data_tuple):
-    pose_seq, annot_eng, annot_deu, transl_eng, transl_deu, seq_len = zip(*data_tuple)
+    pose_seq, label_seq, annot_eng, annot_deu, transl_eng, transl_deu, seq_len = zip(*data_tuple)
     padded_pose_seqs = pad_sequence(pose_seq, batch_first=True)
+    padded_label_seq = pad_sequence(label_seq, batch_first=True)
     return  {
               'pose_seq': padded_pose_seqs,
+              'label_seq': padded_label_seq,
               'annot_eng': annot_eng,
               'annot_deu': annot_deu,
               'transl_eng': transl_eng,
@@ -202,24 +206,28 @@ class SIGNUMDataset(Dataset):
         
         if self.use_pose:
             pose_sequence, pose_length = self._load_pose_sequence(pose_paths)
+            input_pose = pose_sequence[:-1,...]
+            label_pose = pose_sequence[1:,...]
             if self.use_image:
                 assert pose_length == sequence_length       
                 return [image_sequence, 
-                        pose_sequence,
+                        input_pose,
+                        label_pose,
                         sentence_annotation['annot_eng'],
                         sentence_annotation['annot_deu'],
                         sentence_annotation['transl_eng'],
                         sentence_annotation['transl_deu'],
-                        sequence_length
+                        sequence_length - 1 
                     ]
             else:
                 return [
-                        pose_sequence,
+                        input_pose,
+                        label_pose,
                         sentence_annotation['annot_eng'],
                         sentence_annotation['annot_deu'],
                         sentence_annotation['transl_eng'],
                         sentence_annotation['transl_deu'],
-                        sequence_length
+                        sequence_length - 1
                     ]
             
         else:
