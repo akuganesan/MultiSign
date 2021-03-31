@@ -1,6 +1,10 @@
 # MultiSign
 Multi-Lingual Sign-Language Generation
 
+### Skeleton Format
+index 0 to 14 (inclusive) -> BODY
+index 15 to 56 (inclusive) -> HANDS
+
 #### Using dataset.py
 For additional information please checkout the [dataloader_example.ipynb](https://github.com/akuganesan/MultiSign/blob/main/dataloader_example.ipynb)
 ```python
