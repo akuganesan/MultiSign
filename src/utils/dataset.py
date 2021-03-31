@@ -66,7 +66,7 @@ def unpad_sequence(img_sequence, sequence_lens):
 
 class SIGNUMDataset(Dataset):
     def __init__(self, dataset_dir, img_size=256, use_pose=False, include_word=False, \
-                 use_image=True, subsample=10, normalize_poses=True, root_joint=1, body="BODY_25"):
+                 use_image=True, subsample=10, normalize_poses=True, gen_constants=False, root_joint=1, body="BODY_25"):
         """
         Args:
             dataset_dir (string): Path to SIGNUM dataset.
@@ -76,6 +76,8 @@ class SIGNUMDataset(Dataset):
             use_image (boolean, default=True): whether or not to load up images
             subsample (int, default=10): take every n frames from the poses and images
             normalize_poses (boolean, default=True): whether or not to normalize the poses
+            gen_constants (boolean, default = False): if the dataset is being used to generate pose mean and 
+                                                      std (no images and use "whole pose")
             root_joint (int, default=1): which joint index to center based on
             body (string, default="BODY_25"): which body model to use
         """
@@ -85,6 +87,13 @@ class SIGNUMDataset(Dataset):
         self.use_image = use_image
         self.use_pose = use_pose
         self.normalize_poses = normalize_poses
+        self.gen_constants = gen_constants
+        
+        if gen_constants:
+            print("USING DATASET TO GENERATE MEAN AND STD")
+            self.use_image = False
+            self.normalize_poses = False
+            
         self.root_joint = root_joint
         self.body = body
         
@@ -115,12 +124,12 @@ class SIGNUMDataset(Dataset):
             folder_sep = "*/*/"
             file_sep = "*/*.txt"
         else:
-            folder_sep = "*/con*[!_h5]/"
+            folder_sep = "*/con*[!_h?][!_json]/"
             file_sep = "*/con*.txt"
                     
         # INCLUDED THE [:3] so that the number of pose folders matches the number of img folders
-        self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:3]
-        self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[:3]
+        self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))
+        self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))
         
         # TODO: will be added after running the dataset through OpenPose
         
@@ -201,16 +210,27 @@ class SIGNUMDataset(Dataset):
         sentence_annotation = self.text_annotation[idx]
         sequence_paths = self.sequence_paths[idx]
         pose_paths = self.pose_paths[idx]
+        pose_folder = self.pose_folders[idx]
+        
+        # make sure images and poses are coming from the same sentence
+        assert image_folder.split('/')[-1] == pose_folder.split('/')[-1][:-3], 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder) 
         
         if self.use_image:
             image_sequence, sequence_length = self._load_image_sequence(sequence_paths)
         
         if self.use_pose:
             pose_sequence, pose_length = self._load_pose_sequence(pose_paths)
-            input_pose = pose_sequence[:-1,...]
-            label_pose = pose_sequence[1:,...]
+            
+            # if we are generating constants then we want to use the whole pose (not just the input ones)
+            if not self.gen_constants:
+                input_pose = pose_sequence[:-1,...]
+                label_pose = pose_sequence[1:,...]
+            else:
+                input_pose = pose_sequence
+                label_pose = pose_sequence
+
             if self.use_image:
-                assert pose_length == sequence_length       
+                assert pose_length == sequence_length, 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder)       
                 return [image_sequence, 
                         input_pose,
                         label_pose,
@@ -218,7 +238,7 @@ class SIGNUMDataset(Dataset):
                         sentence_annotation['annot_deu'],
                         sentence_annotation['transl_eng'],
                         sentence_annotation['transl_deu'],
-                        sequence_length - 1 
+                        len(input_pose) # because the inputs/labels will be 1 less than the number of images 
                     ]
             else:
                 return [
@@ -228,7 +248,7 @@ class SIGNUMDataset(Dataset):
                         sentence_annotation['annot_deu'],
                         sentence_annotation['transl_eng'],
                         sentence_annotation['transl_deu'],
-                        sequence_length - 1
+                        len(input_pose) # because the inputs/labels will be 1 less than the number of images 
                     ]
             
         else:
