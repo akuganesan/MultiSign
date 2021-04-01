@@ -2,17 +2,25 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import os
 
 from torch.nn.utils import weight_norm
 from transformers import BertTokenizer, BertModel
+from transformers import AutoTokenizer, AutoModel
 
 class language_encoder(nn.Module):
-    def __init__(self):
+    def __init__(self, model_path=None):
         super(language_encoder, self).__init__()
-        self.model = BertModel.from_pretrained('DeepPavlov/bert-base-multilingual-cased-sentence',
-                                  output_hidden_states = True,
-                                  )
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+        if model_path is None:
+            self.model = BertModel.from_pretrained('DeepPavlov/bert-base-multilingual-cased-sentence',
+                                      output_hidden_states = True,
+                                      )
+            self.tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+        else:
+            self.model = AutoModel.from_pretrained(model_path,
+                                      output_hidden_states = True,
+                                      )
+            self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(model_path, 'tokenizer_config.json'))            
 
     def forward(self, x):
         tokenized = self.tokenizer(x, padding=True, return_tensors="pt")

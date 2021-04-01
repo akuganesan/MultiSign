@@ -65,3 +65,12 @@ def plot_pose2D(ax, pose_2d_1, bones=GLOBAL_BONES, linewidth=2, alpha=0.95, colo
     # HARDCODED TO MATCH THE ORIGINAL IMAGE SIZE
     ax.set_xlim([-388,388])
     ax.set_ylim([378,-200]) # backwards because image and plot coordinates are opposite in y axis
+    
+    
+def calculate_batch_mpjpe(output, label):
+    difference =  output - label 
+    square_difference = torch.square(difference) 
+    sum_square_difference_per_point = torch.sum(square_difference, dim=2) 
+    euclidean_distance_per_point = torch.sqrt(sum_square_difference_per_point) 
+    mpjpe = torch.mean(euclidean_distance_per_point)
+    return mpjpe
