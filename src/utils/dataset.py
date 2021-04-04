@@ -66,7 +66,8 @@ def unpad_sequence(img_sequence, sequence_lens):
 
 class SIGNUMDataset(Dataset):
     def __init__(self, dataset_dir, img_size=256, use_pose=False, include_word=False, \
-                 use_image=True, subsample=10, normalize_poses=True, gen_constants=False, root_joint=1, body="BODY_25"):
+                 use_image=True, subsample=10, normalize_poses=True, gen_constants=False, root_joint=1, body="BODY_25", 
+                 training=True):
         """
         Args:
             dataset_dir (string): Path to SIGNUM dataset.
@@ -80,6 +81,7 @@ class SIGNUMDataset(Dataset):
                                                       std (no images and use "whole pose")
             root_joint (int, default=1): which joint index to center based on
             body (string, default="BODY_25"): which body model to use
+            training (boolean, default=True): just a HACK until we have actual training and val split
         """
         self.dataset_dir = dataset_dir
         self.include_word = include_word
@@ -128,15 +130,21 @@ class SIGNUMDataset(Dataset):
             file_sep = "*/con*.txt"
                     
         # INCLUDED THE [:3] so that the number of pose folders matches the number of img folders
-        self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))
-        self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))
+        if training:
+            self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:-50]
+            self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[:-50]
+        else:
+            self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[-50:]
+            self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[-50:]
         
         # TODO: will be added after running the dataset through OpenPose
         
         if self.use_pose:
             folder_sep = "*/con*_h5/"
-            self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))
-            
+            if training:
+                self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:-50]
+            else:
+                self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[-50:]
             self.pose_paths = []
             for folder in self.pose_folders:
                 self.pose_paths.append(sorted(glob.glob(os.path.join(folder, '*'))))
