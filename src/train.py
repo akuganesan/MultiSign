@@ -121,7 +121,7 @@ if __name__ == "__main__":
         optimizer = train_dict['optimizer']
         training_loss = train_dict['loss']
 
-        val_dict = basic_train(epoch, validation_loader, encoder, decoder, None, None, device, training=False)
+        val_dict = basic_train(epoch, validation_loader, encoder, decoder, None, loss_fn, device, training=False)
         validation_loss = val_dict['loss']
         
         print("MPJPE on Validation Dataset after Epoch {} = {}".format(epoch, validation_loss))
