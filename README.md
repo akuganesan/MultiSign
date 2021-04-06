@@ -3,7 +3,6 @@ Multi-Lingual Sign-Language Generation
 
 ### TODO
 - Right now because we only have one subject I manually split the current subject into a training and validation dataset, this will have to be "unhard-coded" 
-- Add visualization code to the training script
 - Add abitlity to load model/checkpoint from a previous run and resume training
 - Write/fix code for evaluation and testing (inside runner.py)
 
