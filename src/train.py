@@ -8,12 +8,14 @@ import matplotlib.pyplot as plt
 import utils.model as model
 import utils.dataset as dataset
 import utils.skel as skel
-from utils.utils import create_folder, save_args, save_configs
+from utils.utils import create_folder, save_args, save_configs, generate_unique_run_name
 import torch.optim as optim
 
 from utils.dataset import SIGNUMDataset
 from transformers import BertTokenizer, BertModel
 from torch.utils.data import Dataset, DataLoader
+
+from torch.utils.tensorboard import SummaryWriter
 
 from runner import basic_train
 
@@ -27,9 +29,9 @@ def config_parser():
                         help='path to config file')
 
     # Hyperparameters and Dataset
-    parser.add_argument('--total_epochs', type=int, default=10,
+    parser.add_argument('--epoch', type=int, default=5,
                         help='total number of training epochs')
-    parser.add_argument('--lr', type=float, default=0.01,
+    parser.add_argument('--lr', type=float, default=0.001,
                         help='learning rate during training')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='batch size for training/evaluation')
@@ -60,7 +62,7 @@ if __name__ == "__main__":
     parser = config_parser()
     args = parser.parse_args()
 
-    total_epochs = args.total_epochs
+    total_epochs = args.epoch
     learning_rate = args.lr
     batch_size = args.batch_size
     dataset_root = args.dataset_root
@@ -75,12 +77,15 @@ if __name__ == "__main__":
 
     device = device = torch.device("cuda:{}".format(args.cuda_num) if torch.cuda.is_available() else "cpu")
 
+    run_name = generate_unique_run_name(run_name, model_path, run_folder)
+    
     # Create folders for logging
     model_folder = create_folder(model_path, run_name)
     run_folder = create_folder(run_folder, run_name)
     
     save_args(os.path.join(run_folder, 'args.txt'), args)
     save_configs(os.path.join(run_folder, 'config.txt'), args.config)
+    writer = SummaryWriter(os.path.join(run_folder, 'logs'))
 
     train_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample, training=True)
     validation_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample, training = False)
@@ -115,27 +120,24 @@ if __name__ == "__main__":
     print('Starting Training')
     for epoch in range(total_epochs):
         
-        # Experiments for 2D to 3D Keypoint Lifting
-        train_dict = basic_train(epoch, train_loader, encoder, decoder, optimizer, loss_fn, device, training=True)
+        train_dict = basic_train(epoch, train_loader, encoder, decoder, optimizer, loss_fn, device, training=True, writer=writer)
         model = train_dict['model']
         optimizer = train_dict['optimizer']
         training_loss = train_dict['loss']
 
-        val_dict = basic_train(epoch, validation_loader, encoder, decoder, None, loss_fn, device, training=False)
+        val_dict = basic_train(epoch, validation_loader, encoder, decoder, None, loss_fn, device, training=False, writer=writer)
         validation_loss = val_dict['loss']
         
-        print("MPJPE on Validation Dataset after Epoch {} = {}".format(epoch, validation_loss))
+        print("Loss on Validation Dataset after Epoch {} = {}".format(epoch, validation_loss))
 
         """SAVE MODEL AND OPTIMIZER"""
         training_file = os.path.join(model_folder, "latest_validation.tar")
         torch.save({
                     'epoch': epoch,
-                    'dataset': use_dataset,
-                    'exp_type': exp_type,
                     'batch_size': batch_size,
                     'validation_loss': validation_loss,
                     'lowest_validation_loss':lowest_validation_loss,
-                    'model_state_dict': model.state_dict(),
+                    'model_state_dict': decoder.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict()
         }, training_file)
 
@@ -144,11 +146,9 @@ if __name__ == "__main__":
             validation_model = os.path.join(model_folder, "lowest_validation_model.tar")
             torch.save({
                         'epoch': epoch,
-                        'dataset': use_dataset,
-                        'exp_type': exp_type,
                         'batch_size': batch_size,
                         'validation_loss': lowest_validation_loss,
-                        'model_state_dict': model.state_dict(),
+                        'model_state_dict': decoder.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict()
             }, validation_model)
 

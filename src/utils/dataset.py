@@ -10,7 +10,7 @@ import utils.constants as constants
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
+from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
@@ -61,8 +61,11 @@ def collate_noImg_fn(data_tuple):
             }
 
 # This function "unpads" the sequences based on the respective input sequence lenghts
-def unpad_sequence(img_sequence, sequence_lens):
-    return pack_padded_sequence(img_sequence, sequence_lens, batch_first=True, enforce_sorted=False)
+def unpad_sequence(packed):
+    return pad_packed_sequence(packed, batch_first=True)
+
+def pack_sequence(tensor, lengths):
+    return pack_padded_sequence(tensor, lengths, batch_first=True, enforce_sorted=False)
 
 class SIGNUMDataset(Dataset):
     def __init__(self, dataset_dir, img_size=256, use_pose=False, include_word=False, \
@@ -238,7 +241,9 @@ class SIGNUMDataset(Dataset):
                 label_pose = pose_sequence
 
             if self.use_image:
-                assert pose_length == sequence_length, 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder)       
+#                 assert pose_length == sequence_length, 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder)
+                if pose_length != sequence_length:
+                    print('pose seq: {}  img seq: {}'.format(image_folder, pose_folder))
                 return [image_sequence, 
                         input_pose,
                         label_pose,
