@@ -21,8 +21,8 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         
     all_loss = 0
     for i, data in enumerate(dataloader):
-#         if i == 1:
-#             break
+        if i == 2:
+            break
         if training:
             optimizer.zero_grad()
 
@@ -41,9 +41,14 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
 
         lang_embed = torch.FloatTensor(encoder(transl_eng)).cuda()
 
-        # For use TP!
-        output = decoder(lang_embed, max(img_seq_len), combined.view(combined.shape[0], combined.shape[1], -1),\
-                              epoch=epoch)
+        if training:
+            output = decoder(lang_embed, max(img_seq_len), combined.view(combined.shape[0], combined.shape[1], -1),\
+                                  epoch=epoch)
+        else:
+            output = decoder.sample(lang_embed.cuda(), max(img_seq_len),\
+                             combined.view(pose_seq.shape[0], pose_seq.shape[1], -1)[:,0,...].cuda(),\
+                             attn=None)
+            
         packed = dataset.pack_sequence(output, np.array(img_seq_len))
         pred_pose = packed.data.view(-1,num_joints*joint_dim*2)
 
@@ -54,8 +59,8 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
 
         # MAKESHIFT ATTENTION (TODO: REPLACE THIS LATER W/ PROPER ATTENTION)
         attention = torch.ones_like(gt_label)
-        attention[1:7,...] *= 2.5
-        attention[:,15:] *= 1.5
+#         attention[1:7,...] *= 2.5
+#         attention[:,15:] *= 1.5
 
         loss = loss_fn(pred_pose*attention, gt_label*attention)
         
