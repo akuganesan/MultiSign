@@ -108,6 +108,8 @@ if __name__ == "__main__":
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, \
                                                     num_workers=num_workers, collate_fn=train_dataset.collate)
+    
+    print('Starting Validation')
     validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, \
                                                     num_workers=num_workers, collate_fn=train_dataset.collate)
 

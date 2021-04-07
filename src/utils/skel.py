@@ -84,7 +84,6 @@ def TB_vis_pose2D(packed, packed_gt):
     
     if len_pose > 1 or len_gt > 1:
         plot_len = min(len_gt, 20)
-        print(plot_len)
         fig, ax = plt.subplots(1,plot_len)
         fig.set_size_inches(plot_len*2, 2)
         
