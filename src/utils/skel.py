@@ -44,8 +44,20 @@ def normalize_pose(pose, mean, std, root_joint=1):
     normalized_joints[root_joint+1:,:] = torch.div(pose[root_joint+1:,:] - mean[root_joint+1:,:], std[root_joint+1:,:])
     return normalized_joints
 
-def denormalize_pose(pose, mean, std):
+def denormalize_pose(pose, mean=constants.SAMPLE_MEAN_BODY_25, std=constants.SAMPLE_STD_BODY_25):
     return torch.mul(pose, std) + mean 
+
+def pose2pytorch(pose, dim1=776, dim2=578):
+    p = torch.clone(pose)
+    p[:,0] = (p[:,0] / dim1 * 2) 
+    p[:,1] = (p[:,1] / dim2 * 2) 
+    return p
+
+def pytorch2pose(pose, dim1=776, dim2=578):
+    p = torch.clone(pose)
+    p[:,:,0] = (p[:,:,0]) / 2 * dim1  
+    p[:,:,1] = (p[:,:,1]) / 2 * dim2
+    return p
 
 # VISUALIZATION CODE
 def plot_pose2D(ax, pose_2d_1, bones=GLOBAL_BONES, linewidth=1, alpha=0.95, colormap='gist_rainbow', autoAxisRange=True):
@@ -67,7 +79,7 @@ def plot_pose2D(ax, pose_2d_1, bones=GLOBAL_BONES, linewidth=1, alpha=0.95, colo
     ax.set_xlim([-388,388])
     ax.set_ylim([378,-200]) # backwards because image and plot coordinates are opposite in y axis
 
-def prep_poses(packed, packed_gt, num_joints=57, joint_dim=2):
+def prep_poses(packed, packed_gt, num_joints=57, joint_dim=2, normalize=True):
     import utils.dataset as dataset
     pose, len_pose  = dataset.unpad_sequence(packed)
     pose_gt, len_gt = dataset.unpad_sequence(packed_gt)
@@ -75,12 +87,16 @@ def prep_poses(packed, packed_gt, num_joints=57, joint_dim=2):
     vis_pose = pose[0,:len_pose[0],:].view(-1, num_joints*joint_dim, 2)[:,:num_joints, :].detach().cpu()
     vis_gt = pose_gt[0,:len_gt[0], :num_joints, ...].detach().cpu()
     
-    vis_pose = denormalize_pose(vis_pose, constants.SAMPLE_MEAN_BODY_25, constants.SAMPLE_STD_BODY_25)
-    vis_gt = denormalize_pose(vis_gt, constants.SAMPLE_MEAN_BODY_25, constants.SAMPLE_STD_BODY_25)
+    if normalize:
+        vis_pose = denormalize_pose(vis_pose, constants.SAMPLE_MEAN_BODY_25, constants.SAMPLE_STD_BODY_25)
+        vis_gt = denormalize_pose(vis_gt, constants.SAMPLE_MEAN_BODY_25, constants.SAMPLE_STD_BODY_25)
+    else:
+        vis_pose = pytorch2pose(vis_pose)
+        vis_gt = pytorch2pose(vis_gt)
     return vis_pose, vis_gt, len_pose[0].item(), len_gt[0].item()
 
-def TB_vis_pose2D(packed, packed_gt):
-    pose_2d, gt_2d, len_pose, len_gt = prep_poses(packed, packed_gt)
+def TB_vis_pose2D(packed, packed_gt, normalize):
+    pose_2d, gt_2d, len_pose, len_gt = prep_poses(packed, packed_gt, normalize=normalize)
     
     if len_pose > 1 or len_gt > 1:
         plot_len = min(len_gt, 20)

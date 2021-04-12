@@ -35,7 +35,7 @@ def config_parser():
                         help='learning rate during training')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='batch size for training/evaluation')
-    parser.add_argument('--num_workers', type=int, default=4,
+    parser.add_argument('--num_workers', type=int, default=2,
                         help='number of workers for the dataloaders')     
     parser.add_argument('--seed', type=int, default=1,
                         help='seed to use')
@@ -43,6 +43,24 @@ def config_parser():
                         help='number of frames to subsample from the raw sequences')
     parser.add_argument('--dataset_root', type=str,
                         help='path to the dataset', default='/scratch/datasets/SIGNUM')
+    
+    # Training
+    parser.add_argument('--attn', dest='attn', action='store_true')
+    parser.add_argument('--no-attn', dest='attn', action='store_false')
+    parser.set_defaults(attn=False)
+    
+    parser.add_argument('--denorm', dest='denorm', action='store_true')
+    parser.add_argument('--no-denorm', dest='denorm', action='store_false')
+    parser.set_defaults(denorm=False)
+    
+    parser.add_argument('--norm_poses', dest='normalize', action='store_true')
+    parser.add_argument('--no_norm_poses', dest='normalize', action='store_false')
+    parser.set_defaults(normalize=True)
+    
+    parser.add_argument('--lr_sched', dest='lr_scheduler', action='store_true')
+    parser.add_argument('--no_lr_sched', dest='lr_scheduler', action='store_false')
+    parser.set_defaults(lr_scheduler=False)
+    
     
     # GPU Allocation
     parser.add_argument('--cuda_num', type=int, default=0,
@@ -68,6 +86,11 @@ if __name__ == "__main__":
     dataset_root = args.dataset_root
     num_workers = args.num_workers
     subsample = args.subsample
+    denorm = args.denorm
+    attn = args.attn
+    normalize_poses = args.normalize
+    lr_scheduler = args.lr_scheduler
+    print('using normalized poses: ', normalize_poses)
     
     run_name = args.run_name
     run_folder = args.run_folder
@@ -83,12 +106,19 @@ if __name__ == "__main__":
     model_folder = create_folder(model_path, run_name)
     run_folder = create_folder(run_folder, run_name)
     
-    save_args(os.path.join(run_folder, 'args.txt'), args)
-    save_configs(os.path.join(run_folder, 'config.txt'), args.config)
-    writer = SummaryWriter(os.path.join(run_folder, 'logs'))
+    save_args(os.path.join(run_folder, "args.txt"), args)
+    save_configs(os.path.join(run_folder, "config.txt"), args.config)
+    writer = SummaryWriter(os.path.join(run_folder, "total_epoch={}-bs={}-lr={}-attn={}-normalize={}-subsample={}".format(total_epochs, \
+                                                                                                                          batch_size, 
+                                                                                                                         learning_rate,
+                                                                                                                         attn,
+                                                                                                                         normalize_poses,
+                                                                                                                         subsample)))
 
-    train_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample, training=True)
-    validation_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample, training = False)
+    train_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample,\
+                                  training=True, normalize_poses=normalize_poses)
+    validation_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample,\
+                                       training = False, normalize_poses=normalize_poses)
     
     print('Training Examples: {}'.format(len(train_dataset)))
     print('Validation Examples: {}'.format(len(validation_dataset)))
@@ -99,7 +129,7 @@ if __name__ == "__main__":
     
     decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=57*2,
                                use_h=False, start_zero=False, use_tp=True,
-                               use_lang=False, use_attn=False).to('cuda:0')
+                               use_lang=False, use_attn=False).to(device)
 
     for param in encoder.parameters():
         param.requires_grad = False
@@ -115,6 +145,10 @@ if __name__ == "__main__":
 
     optimizer = optim.Adam(decoder.parameters(), lr=learning_rate, betas=(0.9, 0.999))
 
+    if lr_scheduler:
+        steps = 10
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, steps)
+    
     lowest_validation_loss = 1e7
 
     loss_fn = nn.L1Loss()
@@ -122,12 +156,16 @@ if __name__ == "__main__":
     print('Starting Training')
     for epoch in range(total_epochs):
         
-        train_dict = basic_train(epoch, train_loader, encoder, decoder, optimizer, loss_fn, device, training=True, writer=writer)
+        train_dict = basic_train(epoch, train_loader, encoder, decoder, optimizer, loss_fn, \
+                                 device, training=True, writer=writer, denorm=denorm, use_attn=attn, \
+                                 normalize_poses=normalize_poses)
         model = train_dict['model']
         optimizer = train_dict['optimizer']
         training_loss = train_dict['loss']
 
-        val_dict = basic_train(epoch, validation_loader, encoder, decoder, None, loss_fn, device, training=False, writer=writer)
+        val_dict = basic_train(epoch, validation_loader, encoder, decoder, None, loss_fn, \
+                               device, training=False, writer=writer, denorm=denorm, use_attn=attn,\
+                               normalize_poses=normalize_poses)
         validation_loss = val_dict['loss']
         
         print("Loss on Validation Dataset after Epoch {} = {}".format(epoch, validation_loss))

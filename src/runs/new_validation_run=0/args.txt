@@ -1,0 +1,16 @@
+attn = False
+batch_size = 8
+config = config/delta.txt
+cuda_num = 1
+dataset_root = /scratch/datasets/SIGNUM
+denorm = False
+epoch = 50
+lr = 0.0005
+lr_scheduler = False
+model_path = model
+normalize = True
+num_workers = 2
+run_folder = runs
+run_name = new_validation
+seed = 1
+subsample = 10

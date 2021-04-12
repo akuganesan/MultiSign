@@ -70,7 +70,7 @@ def pack_sequence(tensor, lengths):
 class SIGNUMDataset(Dataset):
     def __init__(self, dataset_dir, img_size=256, use_pose=False, include_word=False, \
                  use_image=True, subsample=10, normalize_poses=True, gen_constants=False, root_joint=1, body="BODY_25", 
-                 training=True):
+                 training=True, gaussian_frames=False):
         """
         Args:
             dataset_dir (string): Path to SIGNUM dataset.
@@ -85,6 +85,7 @@ class SIGNUMDataset(Dataset):
             root_joint (int, default=1): which joint index to center based on
             body (string, default="BODY_25"): which body model to use
             training (boolean, default=True): just a HACK until we have actual training and val split
+            gaussian_frames (boolean, default=False): whether or not to sample the frames from a gaussian distribution
         """
         self.dataset_dir = dataset_dir
         self.include_word = include_word
@@ -133,21 +134,41 @@ class SIGNUMDataset(Dataset):
             file_sep = "*/con*.txt"
                     
         # INCLUDED THE [:3] so that the number of pose folders matches the number of img folders
+#         if training:
+#             self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:-50]
+#             self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[:-50]
+#         else:
+#             self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[-50:]
+#             self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[-50:]
+        
+#         if self.use_pose:
+#             folder_sep = "*/con*_h5/"
+#             if training:
+#                 self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:-50]
+#             else:
+#                 self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[-50:]
+#             self.pose_paths = []
+#             for folder in self.pose_folders:
+#                 self.pose_paths.append(sorted(glob.glob(os.path.join(folder, '*'))))
+
         if training:
-            self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:-50]
-            self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[:-50]
+            self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))
+            self.sentence_folders = self.sentence_folders[:250] + self.sentence_folders[300:]
+            self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))
+            self.text_files = self.text_files[:250] + self.text_files[300:]
         else:
-            self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[-50:]
-            self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[-50:]
+            self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[250:300]
+            self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[250:300]
         
         # TODO: will be added after running the dataset through OpenPose
-        
+
         if self.use_pose:
             folder_sep = "*/con*_h5/"
             if training:
-                self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:-50]
+                self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))
+                self.pose_folders = self.pose_folders[:250] + self.pose_folders[300:]
             else:
-                self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[-50:]
+                self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[250:300]
             self.pose_paths = []
             for folder in self.pose_folders:
                 self.pose_paths.append(sorted(glob.glob(os.path.join(folder, '*'))))
@@ -175,7 +196,7 @@ class SIGNUMDataset(Dataset):
             temp['transl_deu'] = regex.sub("", lines[3].split('transl_deu')[1])
             self.text_annotation.append(temp)
 
-    def _load_image_sequence(self, sequence_path):
+    def _load_image_sequence(self, sequence_path, frames=None):
         """
             Load in a sequence of data; NOTE WE PROBABLY WANT TO SUBSAMPLE THIS!!    
         """
@@ -187,7 +208,7 @@ class SIGNUMDataset(Dataset):
                 sequence.append(image_tensor)
         return torch.stack(sequence, dim=0), len(sequence)
     
-    def _load_pose_sequence(self, pose_path):
+    def _load_pose_sequence(self, pose_path, frames=None):
         sequence = []
         for i, file_path in enumerate(pose_path):
             if i % self.subsample == 0:
@@ -209,6 +230,7 @@ class SIGNUMDataset(Dataset):
                     pose = skel.normalize_pose(pose, self.mean, self.std, root_joint=self.root_joint)
                     sequence.append(pose)
                 else:
+                    pose = skel.pose2pytorch(pose)
                     sequence.append(pose)
                 
         return torch.stack(sequence, dim=0), len(sequence)
