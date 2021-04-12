@@ -40,7 +40,6 @@ class Encoder(nn.Module):
         outputs, h_n = self.rnn(x)
         return outputs
 
-# NOT USED
 class TrajectoryPredictor(nn.Module):
     def __init__(self, pose_size, trajectory_size, hidden_size):
         super(TrajectoryPredictor, self).__init__()
@@ -75,6 +74,8 @@ class DecoderCell(nn.Module):
         self.use_lang = 1 if use_lang else 0
         self.rnn = nn.GRUCell(input_size=pose_size+trajectory_size+hidden_size*(self.use_h+self.use_lang),
                               hidden_size=hidden_size)
+#         self.rnn = nn.GRU(input_size=pose_size+trajectory_size+hidden_size*(self.use_h+self.use_lang),
+#                               hidden_size=hidden_size, num_layers=2, batch_first=True, dropout=0.2)
         if use_tp:
             self.tp = TrajectoryPredictor(pose_size=pose_size,
                                     trajectory_size=trajectory_size,
@@ -107,8 +108,8 @@ class Decoder(nn.Module):
         self.input_size = pose_size + trajectory_size
         self.cell = DecoderCell(hidden_size, pose_size, trajectory_size,
                                 use_h=use_h, use_tp=use_tp, use_lang=use_lang)
-        ## Hardcoded to reach 0% Teacher forcing in 10 epochs
-        self.tf = TeacherForcing(0.1)
+        ## Hardcoded to reach 0% Teacher forcing in 20 epochs
+        self.tf = TeacherForcing(0.05)
         self.start_zero = start_zero
         self.use_lang = use_lang
         self.use_attn = use_attn
