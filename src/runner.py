@@ -12,8 +12,11 @@ from utils.skel import TB_vis_pose2D, prep_poses
 
 import utils.dataset as dataset
 
+def mean_prior(pred_pose, mean_pose):
+    return
+
 def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device, training=True, \
-                num_joints=57, joint_dim=2, writer=None, update=20, denorm=False, use_attn=False, normalize_poses=True):
+                num_joints=57, joint_dim=2, writer=None, update=20, denorm=False, use_attn=False, normalize_poses=True, attention_value=1):
     print('normalize: ', normalize_poses)
     
     if training == True:
@@ -76,9 +79,10 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
             if use_attn:
 #                 print('attn')
 #                 attention[3:-3,...] *= 1.5
-                attention[:,15:57,:] *= 2.5
-                attention[:,4,:] *= 2.5
-                attention[:,7,:] *= 2.5
+                attention_value = 5
+                attention[:,15:57,:] *= attention_value
+                attention[:,4,:] *= attention_value
+                attention[:,7,:] *= attention_value
 
             loss = loss_fn(pred_pose*attention, gt_label*attention)
         else:
