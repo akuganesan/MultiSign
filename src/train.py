@@ -49,6 +49,9 @@ def config_parser():
     parser.add_argument('--no-attn', dest='attn', action='store_false')
     parser.set_defaults(attn=False)
     
+    parser.add_argument('--attn_value', type=float, default=1,
+                        help='attention weight to put on arms and fingers')
+    
     parser.add_argument('--denorm', dest='denorm', action='store_true')
     parser.add_argument('--no-denorm', dest='denorm', action='store_false')
     parser.set_defaults(denorm=False)
@@ -95,6 +98,7 @@ if __name__ == "__main__":
     run_name = args.run_name
     run_folder = args.run_folder
     model_path = args.model_path
+    attn_value = args.attn_value
     
     torch.manual_seed(args.seed)
 
@@ -108,10 +112,11 @@ if __name__ == "__main__":
     
     save_args(os.path.join(run_folder, "args.txt"), args)
     save_configs(os.path.join(run_folder, "config.txt"), args.config)
-    writer = SummaryWriter(os.path.join(run_folder, "total_epoch={}-bs={}-lr={}-attn={}-normalize={}-subsample={}".format(total_epochs, \
+    writer = SummaryWriter(os.path.join(run_folder, "total_epoch={}-bs={}-lr={}-attn={}[{}]-normalize={}-subsample={}".format(total_epochs, \
                                                                                                                           batch_size, 
                                                                                                                          learning_rate,
-                                                                                                                         attn,
+                                                                                                                         attn, 
+                                                                                                                         attn_value,
                                                                                                                          normalize_poses,
                                                                                                                          subsample)))
 
@@ -151,14 +156,15 @@ if __name__ == "__main__":
     
     lowest_validation_loss = 1e7
 
-    loss_fn = nn.L1Loss()
+#     loss_fn = nn.L1Loss()
+    loss_fn = nn.MSELoss()
 
     print('Starting Training')
     for epoch in range(total_epochs):
         
         train_dict = basic_train(epoch, train_loader, encoder, decoder, optimizer, loss_fn, \
                                  device, training=True, writer=writer, denorm=denorm, use_attn=attn, \
-                                 normalize_poses=normalize_poses)
+                                 normalize_poses=normalize_poses, attention_value=attn_value)
         model = train_dict['model']
         optimizer = train_dict['optimizer']
         training_loss = train_dict['loss']
