@@ -50,7 +50,8 @@ class TrajectoryPredictor(nn.Module):
     def forward(self, x):
         pose_vector = self.lp(x)
         trajectory_vector = self.fc(torch.cat((pose_vector, x), dim=-1))
-        mixed_vector = torch.cat((trajectory_vector, pose_vector), dim=-1)
+#         mixed_vector = torch.cat((trajectory_vector, pose_vector), dim=-1) # original
+        mixed_vector = torch.cat((pose_vector, trajectory_vector), dim=-1)
         return mixed_vector        
 
 class TeacherForcing():
