@@ -31,7 +31,7 @@ def config_parser():
     # Hyperparameters and Dataset
     parser.add_argument('--epoch', type=int, default=5,
                         help='total number of training epochs')
-    parser.add_argument('--lr', type=float, default=0.001,
+    parser.add_argument('--lr', type=float, default=0.0005,
                         help='learning rate during training')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='batch size for training/evaluation')
@@ -73,7 +73,7 @@ def config_parser():
     parser.add_argument('--run_name', type=str,
                         help='name of the current experiment')
     parser.add_argument('--run_folder', type=str,
-                        help='folder to store run files', default='runs')
+                        help='folder to store run files', default="runs-good")
     parser.add_argument('--model_path', type=str,
                         help='where to store model checkpoints', default='model')
     
@@ -132,8 +132,8 @@ if __name__ == "__main__":
     print('INITIALIZING MODELS')
     encoder = model.language_encoder()
     
-    decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=57*2,
-                               use_h=False, start_zero=False, use_tp=True,
+    decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=0,
+                               use_h=False, start_zero=False, use_tp=False,
                                use_lang=False, use_attn=False).to(device)
 
     for param in encoder.parameters():
@@ -145,7 +145,7 @@ if __name__ == "__main__":
                                                     num_workers=num_workers, collate_fn=train_dataset.collate)
     
     print('Starting Validation')
-    validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, \
+    validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=batch_size, shuffle=True, \
                                                     num_workers=num_workers, collate_fn=train_dataset.collate)
 
     optimizer = optim.Adam(decoder.parameters(), lr=learning_rate, betas=(0.9, 0.999))
@@ -156,8 +156,8 @@ if __name__ == "__main__":
     
     lowest_validation_loss = 1e7
 
-#     loss_fn = nn.L1Loss()
-    loss_fn = nn.MSELoss()
+    loss_fn = nn.L1Loss()
+#     loss_fn = nn.MSELoss()
 
     print('Starting Training')
     for epoch in range(total_epochs):

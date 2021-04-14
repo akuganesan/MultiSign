@@ -42,56 +42,62 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         total_sequence = sum(np.array(img_seq_len))
         delta = label_seq - pose_seq
 
-        initial_delta = torch.zeros_like(delta)
+#         initial_delta = torch.zeros_like(delta)
         
         #test
-        initial_delta[:, :, ...] = delta[:, :, ...]
-        
-        combined = torch.cat((pose_seq, initial_delta), dim=-2)
+#         initial_delta[:, :, ...] = delta[:, :, ...]
+#         combined = torch.cat((pose_seq, initial_delta), dim=-2)
+#         combined = torch.cat((initial_delta, pose_seq), dim=-2)
 
         lang_embed = torch.FloatTensor(encoder(transl_eng)).to(device)
 
         if training:
-            output = decoder(lang_embed, max(img_seq_len), combined.view(combined.shape[0], combined.shape[1], -1),\
+            output = decoder(lang_embed, max(img_seq_len), pose_seq.view(pose_seq.shape[0], pose_seq.shape[1], -1),\
                                   epoch=epoch)
         else:
-            output = decoder.sample(lang_embed.to(device), max(img_seq_len),\
-                             combined.view(pose_seq.shape[0], pose_seq.shape[1], -1)[:,0,...].to(device),\
+            output = decoder.sample(lang_embed.to(device), cd 
+                             pose_seq.view(pose_seq.shape[0], pose_seq.shape[1], -1)[:,0,...].to(device),\
                              attn=None)
             
         packed = dataset.pack_sequence(output, np.array(img_seq_len))
-        pred_pose = packed.data.view(-1,num_joints*joint_dim*2)
+        pred_pose = packed.data.view(-1,num_joints*joint_dim)
 
         #test
-        final_delta = torch.zeros_like(delta)
-        final_delta[:, :-1, ...] = delta[:, 1:, ...]
-        combined_label = torch.cat((label_seq, final_delta), dim=-2)
+#         final_delta = torch.zeros_like(delta)
+#         final_delta[:, :-1, ...] = delta[:, 1:, ...]
+#         combined_label = torch.cat((label_seq, final_delta), dim=-2)
+#         combined_label = torch.cat((final_delta, label_seq), dim=-2)
 
-        packed_gt = dataset.pack_sequence(combined_label, np.array(img_seq_len))
-        gt_label = packed_gt.data.view(-1, num_joints*joint_dim*2)
+        packed_gt = dataset.pack_sequence(label_seq, np.array(img_seq_len))
+        gt_label = packed_gt.data.view(-1, num_joints*joint_dim)
 
         # MAKESHIFT ATTENTION (TODO: REPLACE THIS LATER W/ PROPER ATTENTION)
         if training:
-            pred_pose = packed.data.view(-1,num_joints*2, joint_dim)
-            gt_label = packed_gt.data.view(-1, num_joints*2, joint_dim)
+            pred_pose = packed.data.view(-1,num_joints, joint_dim)
+            gt_label = packed_gt.data.view(-1, num_joints, joint_dim)
             
             attention = torch.ones_like(gt_label)
             if use_attn:
-#                 print('attn')
-#                 attention[3:-3,...] *= 1.5
                 attention_value = 5
                 attention[:,15:57,:] *= attention_value
+                attention[:,15:36,:] *= attention_value # attention for the left hand
                 attention[:,4,:] *= attention_value
                 attention[:,7,:] *= attention_value
+                
+                # attention for the deltas
+#                 attention[:,15+57:,:] *= attention_value
+#                 attention[:,15+57:36+57,:] *= attention_value # attention for the left hand
+#                 attention[:,57+4,:] *= attention_value
+#                 attention[:,57+7,:] *= attention_value
 
             loss = loss_fn(pred_pose*attention, gt_label*attention)
         else:
             if normalize_poses:
-                pred_pose = skel.denormalize_pose(pred_pose[:,:num_joints*joint_dim,...].view(-1, num_joints, joint_dim).detach().cpu())
-                gt_label = skel.denormalize_pose(gt_label[:,:num_joints*joint_dim,...].view(-1, num_joints, joint_dim).detach().cpu())
+                pred_pose = skel.denormalize_pose(pred_pose.view(-1, num_joints, joint_dim).detach().cpu())
+                gt_label = skel.denormalize_pose(gt_label.view(-1, num_joints, joint_dim).detach().cpu())
             else:
-                pred_pose = skel.pytorch2pose(pred_pose[:,:num_joints*joint_dim,...].view(-1, num_joints, joint_dim).detach().cpu())
-                gt_label = skel.pytorch2pose(gt_label[:,:num_joints*joint_dim,...].view(-1, num_joints, joint_dim).detach().cpu())
+                pred_pose = skel.pytorch2pose(pred_pose.view(-1, num_joints, joint_dim).detach().cpu())
+                gt_label = skel.pytorch2pose(gt_label.view(-1, num_joints, joint_dim).detach().cpu())
 
             loss = skel.calculate_batch_mpjpe(pred_pose, gt_label)
         

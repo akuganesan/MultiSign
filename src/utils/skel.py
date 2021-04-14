@@ -84,7 +84,7 @@ def prep_poses(packed, packed_gt, num_joints=57, joint_dim=2, normalize=True):
     pose, len_pose  = dataset.unpad_sequence(packed)
     pose_gt, len_gt = dataset.unpad_sequence(packed_gt)
     
-    vis_pose = pose[0,:len_pose[0],:].view(-1, num_joints*joint_dim, 2)[:,:num_joints, :].detach().cpu()
+    vis_pose = pose[0,:len_pose[0],:].view(-1, num_joints, 2)[:,:num_joints, :].detach().cpu()
     vis_gt = pose_gt[0,:len_gt[0], :num_joints, ...].detach().cpu()
     
     if normalize:
