@@ -9,7 +9,7 @@ from transformers import BertTokenizer, BertModel
 from transformers import AutoTokenizer, AutoModel
 
 BERT_MODELS = {"multi" : {"model_name": "bert-base-multilingual-uncased",
-                          "tokenizer": "bert-base-multilingual-cased"}, 
+                          "tokenizer": "bert-base-multilingual-uncased"}, 
                
                "en" :    {"model_name": "bert-base-uncased",
                           "tokenizer": "bert-base-uncased"},
