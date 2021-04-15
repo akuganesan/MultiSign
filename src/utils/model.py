@@ -1,8 +1,11 @@
+import os
+os.environ['TRANSFORMERS_CACHE'] = 'transformer_cache/'
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import os
+
 
 from torch.nn.utils import weight_norm
 from transformers import BertTokenizer, BertModel

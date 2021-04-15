@@ -16,7 +16,8 @@ def mean_prior(pred_pose, mean_pose):
     return
 
 def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device, training=True, \
-                num_joints=57, joint_dim=2, writer=None, update=20, denorm=False, use_attn=False, normalize_poses=True, attention_value=1):
+                num_joints=57, joint_dim=2, writer=None, update=15, denorm=False, use_attn=False,\
+                normalize_poses=True, attention_value=1, encoder_type='multi'):
     print('normalize: ', normalize_poses)
     
     if training == True:
@@ -37,25 +38,29 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         label_seq = data['label_seq'].to(device)
         transl_eng = data['transl_eng']
         transl_deu = data['transl_deu']
+        multilingual = data['multi']
         img_seq_len = data['seq_len']
 
         total_sequence = sum(np.array(img_seq_len))
         delta = label_seq - pose_seq
-
-#         initial_delta = torch.zeros_like(delta)
         
-        #test
-#         initial_delta[:, :, ...] = delta[:, :, ...]
-#         combined = torch.cat((pose_seq, initial_delta), dim=-2)
-#         combined = torch.cat((initial_delta, pose_seq), dim=-2)
+        if encoder_type == 'multi':
+#             print('multi')
+            encoder_input = multilingual
+        elif encoder_type == 'en':
+#             print('en')
+            encoder_input = transl_eng
+        else:
+#             print('de')
+            encoder_input = transl_deu
 
-        lang_embed = torch.FloatTensor(encoder(transl_eng)).to(device)
+        lang_embed = torch.FloatTensor(encoder(encoder_input)).to(device)
 
         if training:
             output = decoder(lang_embed, max(img_seq_len), pose_seq.view(pose_seq.shape[0], pose_seq.shape[1], -1),\
                                   epoch=epoch)
         else:
-            output = decoder.sample(lang_embed.to(device), cd 
+            output = decoder.sample(lang_embed.to(device), max(img_seq_len), \
                              pose_seq.view(pose_seq.shape[0], pose_seq.shape[1], -1)[:,0,...].to(device),\
                              attn=None)
             

@@ -22,18 +22,19 @@ def collate_noPose_fn(data_tuple):
        data: is a list of tuples [img seq, annot eng, annot deu, transl eng, transl deu, seq len] with where 'img_seq' is a tensor of arbitrary shape
              and label/length are scalars
     """
-    img_seq, annot_eng, annot_deu, transl_eng, transl_deu, seq_len = zip(*data_tuple)
+    img_seq, annot_eng, annot_deu, transl_eng, transl_deu, multilingual, seq_len = zip(*data_tuple)
     padded_img_seqs = pad_sequence(img_seq, batch_first=True)
     return  { 'img_seq': padded_img_seqs, 
               'annot_eng': annot_eng,
               'annot_deu': annot_deu,
               'transl_eng': transl_eng,
               'transl_deu': transl_deu,
+              'multi': multilingual,
               'seq_len': seq_len
             }
 
 def collate_all_fn(data_tuple):
-    img_seq, pose_seq, label_seq, annot_eng, annot_deu, transl_eng, transl_deu, seq_len = zip(*data_tuple)
+    img_seq, pose_seq, label_seq, annot_eng, annot_deu, transl_eng, transl_deu, multilingual, seq_len = zip(*data_tuple)
     padded_img_seqs = pad_sequence(img_seq, batch_first=True)
     padded_pose_seqs = pad_sequence(pose_seq, batch_first=True)
     padded_label_seq = pad_sequence(label_seq, batch_first=True)
@@ -44,11 +45,12 @@ def collate_all_fn(data_tuple):
               'annot_deu': annot_deu,
               'transl_eng': transl_eng,
               'transl_deu': transl_deu,
+              'multi': multilingual,
               'seq_len': seq_len
             }
 
 def collate_noImg_fn(data_tuple):
-    pose_seq, label_seq, annot_eng, annot_deu, transl_eng, transl_deu, seq_len = zip(*data_tuple)
+    pose_seq, label_seq, annot_eng, annot_deu, transl_eng, transl_deu, multilingual, seq_len = zip(*data_tuple)
     padded_pose_seqs = pad_sequence(pose_seq, batch_first=True)
     padded_label_seq = pad_sequence(label_seq, batch_first=True)
     return  {
@@ -58,6 +60,7 @@ def collate_noImg_fn(data_tuple):
               'annot_deu': annot_deu,
               'transl_eng': transl_eng,
               'transl_deu': transl_deu,
+              'multi': multilingual,
               'seq_len': seq_len
             }
 
@@ -144,6 +147,7 @@ class SIGNUMDataset(Dataset):
         self.text_files = []
         self.pose_folders = []
         
+        
         for speaker in self.speakers:
         # For filtering the files/folders (iso = word, con = sentence)
             if self.include_word:
@@ -167,7 +171,6 @@ class SIGNUMDataset(Dataset):
                     if i in val:
                         self.sentence_folders.append(sorted_sf[i])
                         self.text_files.append(sorted_tf[i])
-                        print(sorted_sf[i], i)
             elif testing:
                 for i in range(780):
                     if i in test:
@@ -191,9 +194,11 @@ class SIGNUMDataset(Dataset):
                     for i in range(780):
                         if i in test:
                             self.pose_folders.append(pose_folders[i])
-                self.pose_paths = []
-                for folder in self.pose_folders:
-                    self.pose_paths.append(sorted(glob.glob(os.path.join(folder, '*'))))
+        
+        self.pose_paths = []
+        if self.use_pose:
+            for folder in self.pose_folders:
+                self.pose_paths.append(sorted(glob.glob(os.path.join(folder, '*'))))
             
         
         self.sequence_paths = []
@@ -252,7 +257,7 @@ class SIGNUMDataset(Dataset):
                     pose = skel.normalize_pose(pose, self.mean, self.std, root_joint=self.root_joint)
                     sequence.append(pose)
                 else:
-                    pose = skel.pose2pytorch(pose)
+#                     pose = skel.pose2pytorch(pose)
                     sequence.append(pose)
                 
         return torch.stack(sequence, dim=0), len(sequence)
@@ -265,12 +270,12 @@ class SIGNUMDataset(Dataset):
         sentence_annotation = self.text_annotation[idx]
         sequence_paths = self.sequence_paths[idx]
         pose_paths = self.pose_paths[idx]
-        pose_folder = self.pose_folders[idx]   
+        pose_folder = self.pose_folders[idx] 
         
-        print(len(self.pose_folders))
-        print(len(self.pose_paths))
-        print(len(self.sequence_paths))
-        print(len(self.sentence_folders))
+        if np.random.rand(1)[0] < 0.5:
+            multilingual = sentence_annotation['transl_eng']
+        else:
+            multilingual = sentence_annotation['transl_deu']
         
         # make sure images and poses are coming from the same sentence
         assert image_folder.split('/')[-1] == pose_folder.split('/')[-1][:-3], 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder) 
@@ -292,7 +297,7 @@ class SIGNUMDataset(Dataset):
             if self.use_image:
 #                 assert pose_length == sequence_length, 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder)
                 if pose_length != sequence_length:
-                    print('pose seq: {}  img seq: {}'.format(image_folder, pose_folder))
+                    print('pose seq: {}[{}]  img seq: {}[{}]'.format(image_folder, sequence_length, pose_folder, pose_length))
                 return [image_sequence, 
                         input_pose,
                         label_pose,
@@ -300,6 +305,7 @@ class SIGNUMDataset(Dataset):
                         sentence_annotation['annot_deu'],
                         sentence_annotation['transl_eng'],
                         sentence_annotation['transl_deu'],
+                        multilingual,
                         len(input_pose) # because the inputs/labels will be 1 less than the number of images 
                     ]
             else:
@@ -310,6 +316,7 @@ class SIGNUMDataset(Dataset):
                         sentence_annotation['annot_deu'],
                         sentence_annotation['transl_eng'],
                         sentence_annotation['transl_deu'],
+                        multilingual,
                         len(input_pose) # because the inputs/labels will be 1 less than the number of images 
                     ]
             
@@ -319,5 +326,6 @@ class SIGNUMDataset(Dataset):
                     sentence_annotation['annot_deu'],
                     sentence_annotation['transl_eng'],
                     sentence_annotation['transl_deu'],
+                    multilingual,
                     sequence_length
                 ]
