@@ -64,6 +64,7 @@ def config_parser():
     parser.add_argument('--no_lr_sched', dest='lr_scheduler', action='store_false')
     parser.set_defaults(lr_scheduler=False)
     
+    parser.add_argument('--pose_to_video', dest='pose_to_video', action='store_true')
     
     # GPU Allocation
     parser.add_argument('--cuda_num', type=int, default=0,
@@ -93,7 +94,9 @@ if __name__ == "__main__":
     attn = args.attn
     normalize_poses = args.normalize
     lr_scheduler = args.lr_scheduler
+    pose_to_video = args.pose_to_video
     print('using normalized poses: ', normalize_poses)
+    print('using pose to video: ', pose_to_video)
     
     run_name = args.run_name
     run_folder = args.run_folder
@@ -140,6 +143,13 @@ if __name__ == "__main__":
         param.requires_grad = False
         
     encoder.eval() 
+    
+    if pose_to_video:
+        generator = model.Generator(3, 64, 3).to(device)
+        discriminator = (6, 64, 1).to(device)
+    else:
+        generator = None
+        discriminator = None
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, \
                                                     num_workers=num_workers, collate_fn=train_dataset.collate)
@@ -156,15 +166,17 @@ if __name__ == "__main__":
     
     lowest_validation_loss = 1e7
 
+    # loss functions
     loss_fn = nn.L1Loss()
-#     loss_fn = nn.MSELoss()
+    bce_loss = nn.BCELoss()
 
     print('Starting Training')
     for epoch in range(total_epochs):
         
         train_dict = basic_train(epoch, train_loader, encoder, decoder, optimizer, loss_fn, \
                                  device, training=True, writer=writer, denorm=denorm, use_attn=attn, \
-                                 normalize_poses=normalize_poses, attention_value=attn_value)
+                                 normalize_poses=normalize_poses, attention_value=attn_value, generator=generator, \
+                                 discriminator=discriminator)
         model = train_dict['model']
         optimizer = train_dict['optimizer']
         training_loss = train_dict['loss']
