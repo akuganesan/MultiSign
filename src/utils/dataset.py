@@ -2,6 +2,7 @@ import re
 import os
 import glob
 import torch
+import numpy as np
 import pandas as pd
 import deepdish as dd
 import utils.skel as skel
@@ -60,6 +61,7 @@ def collate_noImg_fn(data_tuple):
               'seq_len': seq_len
             }
 
+
 # This function "unpads" the sequences based on the respective input sequence lenghts
 def unpad_sequence(packed):
     return pad_packed_sequence(packed, batch_first=True)
@@ -69,8 +71,8 @@ def pack_sequence(tensor, lengths):
 
 class SIGNUMDataset(Dataset):
     def __init__(self, dataset_dir, img_size=256, use_pose=False, include_word=False, \
-                 use_image=True, subsample=10, normalize_poses=True, gen_constants=False, root_joint=1, body="BODY_25", 
-                 training=True, gaussian_frames=False):
+                 use_image=True, subsample=10, normalize_poses=True, gen_constants=False, root_joint=1, body="BODY_25", \
+                 training=False, validation=False, testing=False, gaussian_frames=False, speaker_id=None):
         """
         Args:
             dataset_dir (string): Path to SIGNUM dataset.
@@ -84,9 +86,17 @@ class SIGNUMDataset(Dataset):
                                                       std (no images and use "whole pose")
             root_joint (int, default=1): which joint index to center based on
             body (string, default="BODY_25"): which body model to use
-            training (boolean, default=True): just a HACK until we have actual training and val split
+            training (boolean, default=False): fixed training split
+            validation (boolean, default=False): fixed validation split
+            testing (boolean, default=False): fixed test split
             gaussian_frames (boolean, default=False): whether or not to sample the frames from a gaussian distribution
         """
+        valtest = [265, 691, 727, 181, 584, 225, 473, 561, 135, 241, 284, 14, 64, 187, 547, 118, 457, 436, 612, 27, 301, 48, 348, 93, 777, 576, 710, 100, 453, 150, 298, 482, 489, 95, 202, 329, 88, 4, 673, 706, 382, 190, 739, 619, 229, 11, 18, 179, 677, 446, 429, 297, 309, 318, 380, 687, 511, 557, 542, 543, 487, 139, 109, 775, 704, 264, 694, 196, 768, 703, 395, 111, 488, 683, 522, 349, 653, 652, 505, 384, 735, 253, 252, 130, 594, 426, 655, 175, 365, 285, 537, 497, 424, 751, 711, 663, 7, 302, 737, 102, 47, 1, 107, 400, 9, 292, 236, 249, 682, 112, 86, 288, 437, 145, 646, 636, 199, 606, 671, 300, 161, 240, 510, 598, 445, 144, 168, 478, 570, 476, 590, 140, 52, 391, 746, 116, 566, 114, 338, 60, 638, 779, 521, 314, 423, 535, 693, 174, 217, 486, 381, 695, 607, 454, 439, 388]
+        
+        
+        val = valtest[len(valtest)//2:]
+        test = valtest[:len(valtest)//2]
+        
         self.dataset_dir = dataset_dir
         self.include_word = include_word
         self.subsample=subsample
@@ -125,53 +135,64 @@ class SIGNUMDataset(Dataset):
             transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)
         ]) 
         
+        if speaker_id:
+            self.speakers = glob.glob(os.path.join(self.dataset_dir, "s"+speaker_id+"*"))
+        else:
+            self.speakers = glob.glob(os.path.join(self.dataset_dir, "s*"))
+
+        self.sentence_folders = []
+        self.text_files = []
+        
+        for speaker in self.speakers:
         # For filtering the files/folders (iso = word, con = sentence)
-        if self.include_word:
-            folder_sep = "*/*/"
-            file_sep = "*/*.txt"
-        else:
-            folder_sep = "*/con*[!_h?][!_json]/"
-            file_sep = "*/con*.txt"
-                    
-        # INCLUDED THE [:3] so that the number of pose folders matches the number of img folders
-#         if training:
-#             self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:-50]
-#             self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[:-50]
-#         else:
-#             self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[-50:]
-#             self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[-50:]
-        
-#         if self.use_pose:
-#             folder_sep = "*/con*_h5/"
-#             if training:
-#                 self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[:-50]
-#             else:
-#                 self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[-50:]
-#             self.pose_paths = []
-#             for folder in self.pose_folders:
-#                 self.pose_paths.append(sorted(glob.glob(os.path.join(folder, '*'))))
-
-        if training:
-            self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))
-            self.sentence_folders = self.sentence_folders[:250] + self.sentence_folders[300:]
-            self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))
-            self.text_files = self.text_files[:250] + self.text_files[300:]
-        else:
-            self.sentence_folders = sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[250:300]
-            self.text_files = sorted(glob.glob(os.path.join(self.dataset_dir, file_sep)))[250:300]
-        
-        # TODO: will be added after running the dataset through OpenPose
-
-        if self.use_pose:
-            folder_sep = "*/con*_h5/"
-            if training:
-                self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))
-                self.pose_folders = self.pose_folders[:250] + self.pose_folders[300:]
+            if self.include_word:
+                folder_sep = "*/"
+                file_sep = "*.txt"
             else:
-                self.pose_folders =  sorted(glob.glob(os.path.join(self.dataset_dir, folder_sep)))[250:300]
-            self.pose_paths = []
-            for folder in self.pose_folders:
-                self.pose_paths.append(sorted(glob.glob(os.path.join(folder, '*'))))
+                folder_sep = "con*[!_h?][!_json]/"
+                file_sep = "con*.txt"
+
+            sorted_sf = sorted(glob.glob(os.path.join(speaker, folder_sep)))
+            sorted_tf = sorted(glob.glob(os.path.join(speaker, file_sep)))
+
+            if training:
+                for i in range(780):
+                    if i not in valtest:
+                        self.sentence_folders.append(sorted_sf[i])
+                        self.text_files.append(sorted_tf[i])
+                        
+            elif validation:
+                for i in range(780):
+                    if i in val:
+                        self.sentence_folders.append(sorted_sf[i])
+                        self.text_files.append(sorted_tf[i])
+                        print(sorted_sf[i], i)
+            elif testing:
+                for i in range(780):
+                    if i in test:
+                        self.sentence_folders.append(sorted_sf[i])
+                        self.text_files.append(sorted_tf[i])
+        
+            # TODO: will be added after running the dataset through OpenPose
+            pose_folders = sorted(glob.glob(os.path.join(speaker, folder_sep)))
+            self.pose_folders = []
+            if self.use_pose:
+                folder_sep = "*/con*_h5/"
+                if training:
+                    for i in range(780):
+                        if i not in valtest:
+                            self.pose_folders.append(pose_folders[i])
+                elif validation:
+                    for i in range(780):
+                        if i in val:
+                            self.pose_folders.append(pose_folders[i])
+                elif testing:
+                    for i in range(780):
+                        if i in test:
+                            self.pose_folders.append(pose_folders[i])
+                self.pose_paths = []
+                for folder in self.pose_folders:
+                    self.pose_paths.append(sorted(glob.glob(os.path.join(folder, '*'))))
             
         
         self.sequence_paths = []
@@ -243,7 +264,7 @@ class SIGNUMDataset(Dataset):
         sentence_annotation = self.text_annotation[idx]
         sequence_paths = self.sequence_paths[idx]
         pose_paths = self.pose_paths[idx]
-        pose_folder = self.pose_folders[idx]
+        pose_folder = self.pose_folders[idx]   
         
         # make sure images and poses are coming from the same sentence
         assert image_folder.split('/')[-1] == pose_folder.split('/')[-1][:-3], 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder) 
