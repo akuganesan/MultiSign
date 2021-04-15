@@ -8,15 +8,30 @@ from torch.nn.utils import weight_norm
 from transformers import BertTokenizer, BertModel
 from transformers import AutoTokenizer, AutoModel
 
+BERT_MODELS = {"multi" : {"model_name": "bert-base-multilingual-uncased",
+                          "tokenizer": "bert-base-multilingual-cased"}, 
+               
+               "en" :    {"model_name": "bert-base-uncased",
+                          "tokenizer": "bert-base-uncased"},
+               
+               "de" :    {"model_name": "dbmdz/bert-base-german-uncased",
+                          "tokenizer": "bert-base-german-cased"}}
 
 class language_encoder(nn.Module):
-    def __init__(self, model_path=None):
+    def __init__(self, model_path=None, model_type="multi"):
         super(language_encoder, self).__init__()
+        if model_type not in BERT_MODELS:
+            error_message = "Invalid BERT model {}. Supported BERT models: {}."
+            raise ValueError(error_message.format(model_type,
+                                                  ", ".join(list(BERT_MODELS.keys()))))
+            
+        model_name = BERT_MODELS[model_type]["model_name"]
+        tokenizer = BERT_MODELS[model_type]["tokenizer"]
+        
         if model_path is None:
-            self.model = BertModel.from_pretrained('DeepPavlov/bert-base-multilingual-cased-sentence',
-                                      output_hidden_states = True,
-                                      )
-            self.tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+            self.model = BertModel.from_pretrained(model_name, output_hidden_states=True)
+            self.tokenizer = BertTokenizer.from_pretrained(tokenizer)
+
         else:
             self.model = AutoModel.from_pretrained(model_path,
                                       output_hidden_states = True,
