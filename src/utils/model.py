@@ -30,7 +30,8 @@ class language_encoder(nn.Module):
 
 
 class TemporalAttention(nn.Module):
-    """Temporal attention for the joint embeddings. 
+    """Temporal attention for the joints. 
+       Focuses on a particular joint frame in the sequence.
        Practically self-attention."""
 
     def __init__(self, hidden_size):
@@ -67,18 +68,36 @@ class TemporalAttention(nn.Module):
         return context, attention_weights
 
 
-# TODO: Finish spacial attention
 class SpacialAttention(nn.Module):
-    def __init__(self, hidden_size):
+    """Spacial attetion for the joints.
+       Focuses on particular joints in a single frame.
+       """
+    
+    def __init__(self, q_size, hidden_size):
         super(SpacialAttention, self).__init__()
         self.hidden_size = hidden_size
-        self.attention_network = None
+        self.q_size = q_size
         self.softmax = nn.Softmax(dim=1)
-        self.dropout = nn.Dropout(0.2)
+
+        self.Q = nn.Linear(q_size, q_size)
+        self.K = nn.Linear(hidden_size, q_size)
+        self.V = nn.Linear(hidden_size, q_size)
+        
+        self.scaling_factor = torch.rsqrt(torch.tensor(self.q_size, dtype=torch.float))
+        self.softmax = nn.Softmax(dim=2) 
 
         
     def forward(self, queries, keys, values):
-        pass
+        q = self.Q(queries)
+        k = self.K(keys)
+        v = self.V(values)
+        
+        batch_size = q.shape[0]
+
+        unnormalized_attention = torch.bmm(q, k.permute(0, 2, 1)) * self.scaling_factor
+        attention_weights = self.softmax(unnormalized_attention)
+        context = torch.bmm(attention_weights, v) 
+        return context, attention_weights
             
 
 class Encoder(nn.Module):
@@ -169,14 +188,20 @@ class Decoder(nn.Module):
         self.use_lang = use_lang
         self.use_attn = use_attn
         self.num_layers = num_layers
-        self.hidden_size = hidden_size
+        self.hidden_size = 0
+        if use_attn:
+            self.hidden_size += pose_size
+        if use_lang:
+           self.hidden_size += hidden_size
         self.dropout = nn.Dropout(0.1)
 
         self.spacial_attention = nn.ModuleList([
-            SpacialAttention(hidden_size=self.hidden_size) for i in range(self.num_layers)])
+            SpacialAttention(q_size=self.hidden_size, hidden_size=hidden_size) 
+            for i in range(self.num_layers)])
         
         self.temporal_attention = nn.ModuleList([
-            TemporalAttention(hidden_size=self.hidden_size) for i in range(self.num_layers)])
+            TemporalAttention(hidden_size=self.hidden_size) 
+            for i in range(self.num_layers)])
         
         self.attention_mlps = nn.ModuleList([
           nn.Sequential(nn.Linear(self.hidden_size, self.hidden_size),
@@ -195,21 +220,41 @@ class Decoder(nn.Module):
 
         Y = []
         H = h.unsqueeze(1)
+        X = x.unsqueeze(1)
+        XH = torch.cat([X, H], dim=2)
         for t in range(time_steps):
-            if self.use_lang:
-                if self.use_attn:  ### calculate temporat attention at each time-step
-                    H = self.attention(self.dropout(H))
-                x, h = self.cell(torch.cat([x, H[:, -1, :]], dim=-1), h)
+            if self.use_attn:
+                if self.use_lang:
+                    XH = self.attention(self.dropout(XH), H)
+                    x, h = self.cell(XH[:, -1, :], h)
+                    XH = torch.cat([XH, torch.cat(
+                        [x.unsqueeze(1), h.unsqueeze(1)], dim=1)], dim=1)
+                    H = torch.cat([H, h.unsqueeze(1)], dim=1)
+                    X = torch.cat([X, x.unsqueeze(1)], dim=1)
 
+                else:
+                    X = self.attention(X, H)
+                    x, h = self.cell(x, h)
+                    H = torch.cat([H, h.unsqueeze(1)], dim=1)
+                    X = torch.cat([X, x.unsqueeze(1)], dim=1)
+
+            elif self.use_lang:
+                x, h = self.cell(torch.cat([x, h], dim=-1), h)
+            
             else:
                 x, h = self.cell(x, h)
-            H = torch.cat((H, h.unsqueeze(1)), dim=1)
-            Y.append(x.unsqueeze(1))
+                Y.append(x.unsqueeze(1))
+
             if t > 0:
                 mask = self.tf(epoch, h.shape[0]).view(-1, 1).to(x.device)
 #                 mask = self.tf(epoch, h.shape[0]).double().view(-1, 1).to(x.device)
                 x = mask * gt[:, t-1, :] + (1-mask) * x
+
+        if self.use_attn:
+            return X
+
         return torch.cat(Y, dim=1)
+
 
     def sample(self, h, time_steps, start, attn=None):
         if self.use_lang:
@@ -217,27 +262,49 @@ class Decoder(nn.Module):
 
         #x = torch.rand(h.shape[0], self.input_size).to(h.device).to(h.dtype)
         x = start ## starting point for the decoding 
+        
         Y = []
         H = h.unsqueeze(1)
+        X = x.unsqueeze(1)
+        XH = torch.cat([X, H], dim=2)
         for t in range(time_steps):
-            if self.use_lang:
-                if self.use_attn:  ### calculate temporal attention at each time-step
-                    H = self.attention(self.dropout(H))
-                x, h = self.cell(torch.cat([x, H[:, -1, :]], dim=-1), h)
+            if self.use_attn:
+                if self.use_lang:
+                    XH = self.attention(self.dropout(XH), H)
+                    x, h = self.cell(XH[:, -1, :], h)
+                    XH = torch.cat([XH, torch.cat(
+                        [x.unsqueeze(1), h.unsqueeze(1)], dim=1)], dim=1)
+                    H = torch.cat([H, h.unsqueeze(1)], dim=1)
+                    X = torch.cat([X, x.unsqueeze(1)], dim=1)
+
+                else:
+                    X = self.attention(X, H)
+                    x, h = self.cell(x, h)
+                    H = torch.cat([H, h.unsqueeze(1)], dim=1)
+                    X = torch.cat([X, x.unsqueeze(1)], dim=1)
+
+            elif self.use_lang:
+                x, h = self.cell(torch.cat([x, h], dim=-1), h)
+            
             else:
                 x, h = self.cell(x, h)
-            H = torch.cat((H, h.unsqueeze(1)), dim=1)
-            Y.append(x.unsqueeze(1))
+                Y.append(x.unsqueeze(1))
+
+        if self.use_attn:
+            return X
+
         return torch.cat(Y, dim=1)
- 
-
-    def attention(self, h):
+        
+    def attention(self, x, h):
         for i in range(self.num_layers):
-            temp_h, temp_att_w = self.temporal_attention[i](h, h, h)
-            h = temp_h + h
-            h = self.attention_mlps[i](h)
-
-        return h
+            temporal_x, temporal_att_weights = self.temporal_attention[i](x, x, x)
+            x = temporal_x + x
+            # last_frame_x = x[:, -1, :]
+            # spacial_x, spacial_att_weights = self.spacial_attention[i](last_frame_h, h, h)
+            spacial_x, spacial_att_weights = self.spacial_attention[i](x, h, h)
+            x = spacial_x + x
+            x = self.attention_mlps[i](x)
+        return x
     
 
 class Seq2Seq(nn.Module):
