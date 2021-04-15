@@ -279,7 +279,7 @@ class Decoder(nn.Module):
 
                 else:
                     X = self.attention(X, H)
-                    x, h = self.cell(x, h)
+                    x, h = self.cell(X[:, -1, :], h)
                     H = torch.cat([H, h.unsqueeze(1)], dim=1)
                     X = torch.cat([X, x.unsqueeze(1)], dim=1)
 
