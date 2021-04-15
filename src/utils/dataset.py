@@ -142,6 +142,7 @@ class SIGNUMDataset(Dataset):
 
         self.sentence_folders = []
         self.text_files = []
+        self.pose_folders = []
         
         for speaker in self.speakers:
         # For filtering the files/folders (iso = word, con = sentence)
@@ -176,7 +177,7 @@ class SIGNUMDataset(Dataset):
             # TODO: will be added after running the dataset through OpenPose
             folder_sep = "con*_h5/"
             pose_folders = sorted(glob.glob(os.path.join(speaker, folder_sep)))
-            self.pose_folders = []
+            
             if self.use_pose:
                 if training:
                     for i in range(780):
@@ -265,6 +266,11 @@ class SIGNUMDataset(Dataset):
         sequence_paths = self.sequence_paths[idx]
         pose_paths = self.pose_paths[idx]
         pose_folder = self.pose_folders[idx]   
+        
+        print(len(self.pose_folders))
+        print(len(self.pose_paths))
+        print(len(self.sequence_paths))
+        print(len(self.sentence_folders))
         
         # make sure images and poses are coming from the same sentence
         assert image_folder.split('/')[-1] == pose_folder.split('/')[-1][:-3], 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder) 
