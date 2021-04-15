@@ -174,10 +174,10 @@ class SIGNUMDataset(Dataset):
                         self.text_files.append(sorted_tf[i])
         
             # TODO: will be added after running the dataset through OpenPose
+            folder_sep = "con*_h5/"
             pose_folders = sorted(glob.glob(os.path.join(speaker, folder_sep)))
             self.pose_folders = []
             if self.use_pose:
-                folder_sep = "*/con*_h5/"
                 if training:
                     for i in range(780):
                         if i not in valtest:
