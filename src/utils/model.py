@@ -8,13 +8,13 @@ from torch.nn.utils import weight_norm
 from transformers import BertTokenizer, BertModel
 from transformers import AutoTokenizer, AutoModel
 
-BERT_MODELS = {"multi" : {"model_name": "bert-base-multilingual-uncased",
-                          "tokenizer": "bert-base-multilingual-uncased"}, 
+BERT_MODELS = {"multi" : {"model_name": "bert-base-multilingual-cased",
+                          "tokenizer": "bert-base-multilingual-cased"}, 
                
-               "en" :    {"model_name": "bert-base-uncased",
-                          "tokenizer": "bert-base-uncased"},
+               "en" :    {"model_name": "bert-base-cased",
+                          "tokenizer": "bert-base-cased"},
                
-               "de" :    {"model_name": "dbmdz/bert-base-german-uncased",
+               "de" :    {"model_name": "bert-base-german-cased",
                           "tokenizer": "bert-base-german-cased"}}
 
 class language_encoder(nn.Module):
