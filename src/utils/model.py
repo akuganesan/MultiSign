@@ -115,11 +115,8 @@ class SpacialAttention(nn.Module):
         unnormalized_attention = torch.bmm(q, k.permute(0, 2, 1)) * self.scaling_factor
         attention_weights = self.softmax(unnormalized_attention)
         context = torch.bmm(attention_weights, v) 
-<<<<<<< Updated upstream
-        return context, attention_weights    
-=======
+
         return context, attention_weights
->>>>>>> Stashed changes
             
 
 class Encoder(nn.Module):
@@ -249,11 +246,7 @@ class Decoder(nn.Module):
                 if self.use_lang:
                     x, h = self.cell(torch.cat([x, h], dim=-1), h)
                     XH = torch.cat([XH, torch.cat(
-<<<<<<< Updated upstream
-                        [x.unsqueeze(1), h.unsqueeze(1)], dim=1)], dim=1)
-=======
                         [x.unsqueeze(1), h.unsqueeze(1)], dim=2)], dim=1)
->>>>>>> Stashed changes
                     H = torch.cat([H, h.unsqueeze(1)], dim=1)
                     X = torch.cat([X, x.unsqueeze(1)], dim=1)
 
@@ -300,11 +293,7 @@ class Decoder(nn.Module):
                 if self.use_lang:
                     x, h = self.cell(torch.cat([x, h], dim=-1), h)
                     XH = torch.cat([XH, torch.cat(
-<<<<<<< Updated upstream
-                        [x.unsqueeze(1), h.unsqueeze(1)], dim=1)], dim=1)
-=======
                         [x.unsqueeze(1), h.unsqueeze(1)], dim=2)], dim=1)
->>>>>>> Stashed changes
                     H = torch.cat([H, h.unsqueeze(1)], dim=1)
                     X = torch.cat([X, x.unsqueeze(1)], dim=1)
 
@@ -338,9 +327,6 @@ class Decoder(nn.Module):
             h = spacial_h + h
             h = self.attention_mlps[i](h)
         return h       
-<<<<<<< Updated upstream
-
-=======
 
     
 class DecoderAttJoints(nn.Module):
@@ -445,139 +431,6 @@ class DecoderAttJoints(nn.Module):
                     x, h = self.cell(XH[:, -1, :], h)
                     XH = torch.cat([XH, torch.cat(
                         [x.unsqueeze(1), h.unsqueeze(1)], dim=2)], dim=1)
-                    H = torch.cat([H, h.unsqueeze(1)], dim=1)
-                    X = torch.cat([X, x.unsqueeze(1)], dim=1)
-
-                else:
-                    X = self.attention(X, H)
-                    x, h = self.cell(X[:, -1, :], h)
-                    H = torch.cat([H, h.unsqueeze(1)], dim=1)
-                    X = torch.cat([X, x.unsqueeze(1)], dim=1)
-
-            elif self.use_lang:
-                x, h = self.cell(torch.cat([x, h], dim=-1), h)
-            
-            else:
-                x, h = self.cell(x, h)
-                Y.append(x.unsqueeze(1))
-
-        if self.use_attn:
-            return self.linear(X)
-
-        return torch.cat(Y, dim=1)
-        
-    def attention(self, x, h):
-        for i in range(self.num_layers):
-            temporal_x, temporal_att_weights = self.temporal_attention[i](x, x, x)
-            x = temporal_x + x
-            spacial_x, spacial_att_weights = self.spacial_attention[i](x, h, h)
-            x = spacial_x + x
-            x = self.attention_mlps[i](x)
-        return x
->>>>>>> Stashed changes
-    
-class DecoderAttJoints(nn.Module):
-    def __init__(self, hidden_size, pose_size, trajectory_size,
-               use_h=False, start_zero=False, use_tp=True,
-               use_lang=False, use_attn=False, num_layers=1, device="cuda"):
-        super(DecoderAttJoints, self).__init__()
-        self.input_size = pose_size + trajectory_size
-        self.cell = DecoderCell(hidden_size, pose_size, trajectory_size,
-                                use_h=use_h, use_tp=use_tp, use_lang=use_lang)
-        ## Hardcoded to reach 0% Teacher forcing in 20 epochs
-        self.tf = TeacherForcing(0.05)
-        self.start_zero = start_zero
-        self.use_lang = use_lang
-        self.use_attn = use_attn
-        self.num_layers = num_layers
-        self.hidden_size = 0
-        if use_attn:
-            self.hidden_size += pose_size
-        if use_lang:
-            self.hidden_size += hidden_size
-        self.dropout = nn.Dropout(0.1)
-
-        self.spacial_attention = nn.ModuleList([
-            SpacialAttention(k_v_size=hidden_size, hidden_size=self.hidden_size) 
-            for i in range(self.num_layers)])
-        
-        self.temporal_attention = nn.ModuleList([
-            TemporalAttention(hidden_size=self.hidden_size, device=device) 
-            for i in range(self.num_layers)])
-        
-        self.attention_mlps = nn.ModuleList([
-          nn.Sequential(nn.Linear(self.hidden_size, self.hidden_size),
-                        nn.ReLU()) for i in range(self.num_layers)])
-        
-        self.linear = nn.Linear(self.hidden_size, pose_size)
-
-    
-    def forward(self, h, time_steps, gt, epoch=np.inf, attn=None):
-        if self.use_lang:
-            lang_z = h
-            
-        if self.start_zero:
-            x = h.new_zeros(h.shape[0], self.input_size)
-            x = h.new_tensor(torch.rand(h.shape[0], self.input_size))
-        else:
-            x = gt[:, 0, :] ## starting point for the decoding 
-
-        Y = []
-        H = h.unsqueeze(1)
-        X = x.unsqueeze(1)
-        XH = torch.cat([X, H], dim=2)
-        for t in range(time_steps):
-            if self.use_attn:
-                if self.use_lang:
-                    XH = self.attention(self.dropout(XH), H)
-                    x, h = self.cell(XH[:, -1, :], h)
-                    XH = torch.cat([XH, torch.cat(
-                        [x.unsqueeze(1), h.unsqueeze(1)], dim=1)], dim=1)
-                    H = torch.cat([H, h.unsqueeze(1)], dim=1)
-                    X = torch.cat([X, x.unsqueeze(1)], dim=1)
-
-                else:
-                    X = self.attention(X, H)
-                    x, h = self.cell(x, h)
-                    H = torch.cat([H, h.unsqueeze(1)], dim=1)
-                    X = torch.cat([X, x.unsqueeze(1)], dim=1)
-
-            elif self.use_lang:
-                x, h = self.cell(torch.cat([x, h], dim=-1), h)
-            
-            else:
-                x, h = self.cell(x, h)
-                Y.append(x.unsqueeze(1))
-
-            if t > 0:
-                mask = self.tf(epoch, h.shape[0]).view(-1, 1).to(x.device)
-#                 mask = self.tf(epoch, h.shape[0]).double().view(-1, 1).to(x.device)
-                x = mask * gt[:, t-1, :] + (1-mask) * x
-
-        if self.use_attn:
-            return self.linear(X)
-
-        return torch.cat(Y, dim=1)
-
-
-    def sample(self, h, time_steps, start, attn=None):
-        if self.use_lang:
-            lang_z = h
-
-        #x = torch.rand(h.shape[0], self.input_size).to(h.device).to(h.dtype)
-        x = start ## starting point for the decoding 
-        
-        Y = []
-        H = h.unsqueeze(1)
-        X = x.unsqueeze(1)
-        XH = torch.cat([X, H], dim=2)
-        for t in range(time_steps):
-            if self.use_attn:
-                if self.use_lang:
-                    XH = self.attention(self.dropout(XH), H)
-                    x, h = self.cell(XH[:, -1, :], h)
-                    XH = torch.cat([XH, torch.cat(
-                        [x.unsqueeze(1), h.unsqueeze(1)], dim=1)], dim=1)
                     H = torch.cat([H, h.unsqueeze(1)], dim=1)
                     X = torch.cat([X, x.unsqueeze(1)], dim=1)
 
