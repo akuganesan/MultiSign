@@ -48,12 +48,14 @@ def config_parser():
                         help='path to the dataset', default='/scratch/datasets/SIGNUM')
     parser.add_argument('--encoder_type', type=str,
                         help='type of language encoder', default='multi')
+    parser.add_argument('--decoder_attn', type=bool,
+                        help='use attention in the decoder', default=False)
     
     # Training
     parser.add_argument('--attn', dest='attn', action='store_true')
     parser.add_argument('--no-attn', dest='attn', action='store_false')
     parser.set_defaults(attn=False)
-    
+        
     parser.add_argument('--attn_value', type=float, default=1,
                         help='attention weight to put on arms and fingers')
     
@@ -99,6 +101,7 @@ if __name__ == "__main__":
     normalize_poses = args.normalize
     lr_scheduler = args.lr_scheduler
     encoder_type = args.encoder_type
+    decoder_attn = args.decoder_attn
     print('using normalized poses: ', normalize_poses)
     print('encoder type: ', encoder_type)
     
@@ -141,7 +144,7 @@ if __name__ == "__main__":
     
     decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=0,
                                use_h=False, start_zero=False, use_tp=False,
-                               use_lang=False, use_attn=False).to(device)
+                               use_lang=False, use_attn=decoder_attn).to(device)
 
     for param in encoder.parameters():
         param.requires_grad = False

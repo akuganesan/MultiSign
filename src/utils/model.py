@@ -333,9 +333,8 @@ class Decoder(nn.Module):
     def attention(self, h, x):
         for i in range(self.num_layers):
             temporal_h, temporal_att_weights = self.temporal_attention[i](h, h, h)
-            h = temporal_h + h
             spacial_h, spacial_att_weights = self.spacial_attention[i](h, x, x)
-            h = spacial_h + h
+            h = temporal_h + spacial_h + h
             h = self.attention_mlps[i](h)
         return h       
 
@@ -419,6 +418,10 @@ class DecoderAttJoints(nn.Module):
                 x = mask * gt[:, t-1, :] + (1-mask) * x
 
         if self.use_attn:
+            if self.use_lang:
+                X = self.attention(self.dropout(X), XH)
+            else:
+                X = self.attention(self.dropout(X), H)
             return self.linear(X)
 
         return torch.cat(Y, dim=1)
@@ -459,10 +462,15 @@ class DecoderAttJoints(nn.Module):
                 Y.append(x.unsqueeze(1))
 
         if self.use_attn:
+            if self.use_lang:
+                X = self.attention(self.dropout(X), XH)
+            else:
+                X = self.attention(self.dropout(X), H)
             return self.linear(X)
 
         return torch.cat(Y, dim=1)
         
+
     def attention(self, x, h):
         for i in range(self.num_layers):
             temporal_x, temporal_att_weights = self.temporal_attention[i](x, x, x)
