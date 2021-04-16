@@ -55,7 +55,7 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
             output = decoder(lang_embed, max(img_seq_len), pose_seq.view(pose_seq.shape[0], pose_seq.shape[1], -1),\
                                   epoch=epoch)
         else:
-            output = decoder.sample(lang_embed.to(device), cd 
+            output = decoder.sample(lang_embed.to(device), 
                              pose_seq.view(pose_seq.shape[0], pose_seq.shape[1], -1)[:,0,...].to(device),\
                              attn=None)
             
