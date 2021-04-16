@@ -23,7 +23,6 @@ from runner import basic_train
 import configargparse
 
 
-
 def config_parser():
     parser = configargparse.ArgumentParser()
     
@@ -52,7 +51,7 @@ def config_parser():
                         help='use attention in the decoder', default=False)
     parser.add_argument('--decoder_type', type=str,
                         help='decoder type depending on attention: "joint" or "hidden"',
-                        default="joint")
+                        default="hidden")
     parser.add_argument('--decoder_num_layers', type=int, default=1,
                        help="number of attention heads")
     
