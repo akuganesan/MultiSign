@@ -53,6 +53,8 @@ def config_parser():
     parser.add_argument('--decoder_type', type=str,
                         help='decoder type depending on attention: "joint" or "hidden"',
                         default="joint")
+    parser.add_argument('--decoder_num_layers', type=int, default=1,
+                       help="number of attention heads")
     
     # Training
     parser.add_argument('--attn', dest='attn', action='store_true')
@@ -106,6 +108,7 @@ if __name__ == "__main__":
     encoder_type = args.encoder_type
     decoder_attn = args.decoder_attn
     decoder_type = args.decoder_type
+    decoder_num_layers = args.decoder_num_layers
     print('using normalized poses: ', normalize_poses)
     print('encoder type: ', encoder_type)
     
@@ -148,12 +151,15 @@ if __name__ == "__main__":
     
     if decoder_type == "hidden":
         decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=0,
-                                   use_h=False, start_zero=False, use_tp=False,
-                                   use_lang=False, use_attn=decoder_attn).to(device)
+                                use_h=False, start_zero=False, use_tp=False,
+                                use_lang=False, use_attn=decoder_attn,
+                                num_layers=decoder_num_layers).to(device)
+
     elif decoder_type == "joint":
         decoder = model.DecoderAttJoint(hidden_size=768, pose_size=57*2, trajectory_size=0,
                                         use_h=False, start_zero=False, use_tp=False,
-                                        use_lang=False, use_attn=decoder_attn).to(device)  
+                                        use_lang=False, use_attn=decoder_attn,
+                                        num_layers=decoder_num_layers).to(device)  
     else:
         raise ValueError("Unsupported decoder type: {}".format(decoder_type))
 
