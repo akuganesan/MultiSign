@@ -155,7 +155,7 @@ if __name__ == "__main__":
                                 num_layers=decoder_num_layers, device=device).to(device)
 
     elif decoder_type == "joint":
-        decoder = model.DecoderAttJoint(hidden_size=768, pose_size=57*2, trajectory_size=0,
+        decoder = model.DecoderAttJoints(hidden_size=768, pose_size=57*2, trajectory_size=0,
                                         use_h=False, start_zero=False, use_tp=False,
                                         use_lang=False, use_attn=decoder_attn,
                                         num_layers=decoder_num_layers, device=device).to(device)  
