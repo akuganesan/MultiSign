@@ -153,13 +153,13 @@ if __name__ == "__main__":
         decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=0,
                                 use_h=False, start_zero=False, use_tp=False,
                                 use_lang=False, use_attn=decoder_attn,
-                                num_layers=decoder_num_layers).to(device)
+                                num_layers=decoder_num_layers, device=device).to(device)
 
     elif decoder_type == "joint":
         decoder = model.DecoderAttJoint(hidden_size=768, pose_size=57*2, trajectory_size=0,
                                         use_h=False, start_zero=False, use_tp=False,
                                         use_lang=False, use_attn=decoder_attn,
-                                        num_layers=decoder_num_layers).to(device)  
+                                        num_layers=decoder_num_layers, device=device).to(device)  
     else:
         raise ValueError("Unsupported decoder type: {}".format(decoder_type))
 
