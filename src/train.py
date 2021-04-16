@@ -11,6 +11,7 @@ import utils.skel as skel
 from utils.utils import create_folder, save_args, save_configs, generate_unique_run_name
 import torch.optim as optim
 
+os.environ['TRANSFORMERS_CACHE'] = 'transformer_cache/'
 from utils.dataset import SIGNUMDataset
 from transformers import BertTokenizer, BertModel
 from torch.utils.data import Dataset, DataLoader
@@ -20,6 +21,8 @@ from torch.utils.tensorboard import SummaryWriter
 from runner import basic_train
 
 import configargparse
+
+
 
 def config_parser():
     parser = configargparse.ArgumentParser()
@@ -31,7 +34,7 @@ def config_parser():
     # Hyperparameters and Dataset
     parser.add_argument('--epoch', type=int, default=5,
                         help='total number of training epochs')
-    parser.add_argument('--lr', type=float, default=0.0005,
+    parser.add_argument('--lr', type=float, default=0.0001,
                         help='learning rate during training')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='batch size for training/evaluation')
@@ -43,6 +46,8 @@ def config_parser():
                         help='number of frames to subsample from the raw sequences')
     parser.add_argument('--dataset_root', type=str,
                         help='path to the dataset', default='/scratch/datasets/SIGNUM')
+    parser.add_argument('--encoder_type', type=str,
+                        help='type of language encoder', default='multi')
     
     # Training
     parser.add_argument('--attn', dest='attn', action='store_true')
@@ -73,9 +78,9 @@ def config_parser():
     parser.add_argument('--run_name', type=str,
                         help='name of the current experiment')
     parser.add_argument('--run_folder', type=str,
-                        help='folder to store run files', default="runs-good")
+                        help='folder to store run files', default="runs-best")
     parser.add_argument('--model_path', type=str,
-                        help='where to store model checkpoints', default='model')
+                        help='where to store model checkpoints', default='model-best')
     
     return parser
 
@@ -93,7 +98,9 @@ if __name__ == "__main__":
     attn = args.attn
     normalize_poses = args.normalize
     lr_scheduler = args.lr_scheduler
+    encoder_type = args.encoder_type
     print('using normalized poses: ', normalize_poses)
+    print('encoder type: ', encoder_type)
     
     run_name = args.run_name
     run_folder = args.run_folder
@@ -123,14 +130,14 @@ if __name__ == "__main__":
     train_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample,\
                                   training=True, normalize_poses=normalize_poses)
     validation_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample,\
-                                       training = False, normalize_poses=normalize_poses)
+                                       validation = True, normalize_poses=normalize_poses)
     
     print('Training Examples: {}'.format(len(train_dataset)))
     print('Validation Examples: {}'.format(len(validation_dataset)))
             
     # Initialize Models
     print('INITIALIZING MODELS')
-    encoder = model.language_encoder()
+    encoder = model.language_encoder(model_type=encoder_type)
     
     decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=0,
                                use_h=False, start_zero=False, use_tp=False,
@@ -157,21 +164,20 @@ if __name__ == "__main__":
     lowest_validation_loss = 1e7
 
     loss_fn = nn.L1Loss()
-#     loss_fn = nn.MSELoss()
 
     print('Starting Training')
     for epoch in range(total_epochs):
         
         train_dict = basic_train(epoch, train_loader, encoder, decoder, optimizer, loss_fn, \
                                  device, training=True, writer=writer, denorm=denorm, use_attn=attn, \
-                                 normalize_poses=normalize_poses, attention_value=attn_value)
+                                 normalize_poses=normalize_poses, attention_value=attn_value, encoder_type=encoder_type)
         model = train_dict['model']
         optimizer = train_dict['optimizer']
         training_loss = train_dict['loss']
 
         val_dict = basic_train(epoch, validation_loader, encoder, decoder, None, loss_fn, \
                                device, training=False, writer=writer, denorm=denorm, use_attn=attn,\
-                               normalize_poses=normalize_poses)
+                               normalize_poses=normalize_poses, encoder_type=encoder_type)
         validation_loss = val_dict['loss']
         
         print("Loss on Validation Dataset after Epoch {} = {}".format(epoch, validation_loss))
