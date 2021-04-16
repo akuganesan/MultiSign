@@ -50,6 +50,9 @@ def config_parser():
                         help='type of language encoder', default='multi')
     parser.add_argument('--decoder_attn', type=bool,
                         help='use attention in the decoder', default=False)
+    parser.add_argument('--decoder_type', type=str,
+                        help='decoder type depending on attention: "joint" or "hidden"',
+                        default="joint")
     
     # Training
     parser.add_argument('--attn', dest='attn', action='store_true')
@@ -102,6 +105,7 @@ if __name__ == "__main__":
     lr_scheduler = args.lr_scheduler
     encoder_type = args.encoder_type
     decoder_attn = args.decoder_attn
+    decoder_type = args.decoder_type
     print('using normalized poses: ', normalize_poses)
     print('encoder type: ', encoder_type)
     
@@ -142,9 +146,16 @@ if __name__ == "__main__":
     print('INITIALIZING MODELS')
     encoder = model.language_encoder(model_type=encoder_type)
     
-    decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=0,
-                               use_h=False, start_zero=False, use_tp=False,
-                               use_lang=False, use_attn=decoder_attn).to(device)
+    if decoder_type == "hidden":
+        decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=0,
+                                   use_h=False, start_zero=False, use_tp=False,
+                                   use_lang=False, use_attn=decoder_attn).to(device)
+    elif decoder_type == "joint":
+        decoder = model.DecoderAttJoint(hidden_size=768, pose_size=57*2, trajectory_size=0,
+                                        use_h=False, start_zero=False, use_tp=False,
+                                        use_lang=False, use_attn=decoder_attn).to(device)  
+    else:
+        raise ValueError("Unsupported decoder type: {}".format(decoder_type))
 
     for param in encoder.parameters():
         param.requires_grad = False
