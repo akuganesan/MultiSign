@@ -20,15 +20,6 @@ BERT_MODELS = {"multi" : {"model_name": "bert-base-multilingual-cased",
                "de" :    {"model_name": "bert-base-german-cased",
                           "tokenizer": "bert-base-german-cased"}}
 
-BERT_MODELS = {"multi" : {"model_name": "bert-base-multilingual-cased",
-                          "tokenizer": "bert-base-multilingual-cased"}, 
-               
-               "en" :    {"model_name": "bert-base-cased",
-                          "tokenizer": "bert-base-cased"},
-               
-               "de" :    {"model_name": "bert-base-german-cased",
-                          "tokenizer": "bert-base-german-cased"}}
-
 class language_encoder(nn.Module):
     def __init__(self, model_path=None, model_type="multi"):
         super(language_encoder, self).__init__()
