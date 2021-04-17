@@ -108,11 +108,22 @@ if __name__ == "__main__":
    
 
     print('Starting Testing')
-    test_dict = basic_test(test_loader, encoder, decoder, device, encoder_type=encoder_type)
-    test_loss = test_dict['loss']
+    if encoder_type == 'multi':
+        test_dict = basic_test(test_loader, encoder, decoder, device, encoder_type='en')
+        test_loss = test_dict['loss']
 
-    print("Loss on Testing Dataset after Epoch {} of Training = {}".format(checkpoint["epoch"], test_loss))
+        print("ENGLISH Loss on Testing Dataset after Epoch {} of Training = {}".format(checkpoint["epoch"], test_loss))
+        
+        test_dict = basic_test(test_loader, encoder, decoder, device, encoder_type='de')
+        test_loss = test_dict['loss']
 
-    print('Finished Training')
+        print("GERMAN Loss on Testing Dataset after Epoch {} of Training = {}".format(checkpoint["epoch"], test_loss))
+    else:
+        test_dict = basic_test(test_loader, encoder, decoder, device, encoder_type=encoder_type)
+        test_loss = test_dict['loss']
+
+        print("Loss on Testing Dataset after Epoch {} of Training = {}".format(checkpoint["epoch"], test_loss))
+
+    print('Finished Testing')
     
     
