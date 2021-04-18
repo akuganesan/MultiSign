@@ -161,7 +161,7 @@ if __name__ == "__main__":
         decoder = model.DecoderCurriculum(hidden_size=768, pose_size=57*2, trajectory_size=0,
                                         use_h=False, start_zero=False, use_tp=False,
                                         use_lang=False, use_attn=decoder_attn,
-                                        num_layers=decoder_num_layers, device=device, eopch=total_epochs).to(device)  
+                                        num_layers=decoder_num_layers, device=device, epoch=total_epochs).to(device)  
     else:
         raise ValueError("Unsupported decoder type: {}".format(decoder_type))
 
