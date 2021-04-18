@@ -96,10 +96,9 @@ class SpacialAttention(nn.Module):
        Focuses on particular joints in a single frame.
        """
     
-    def __init__(self, k_v_size, hidden_size):
+    def __init__(self, hidden_size):
         super(SpacialAttention, self).__init__()
         self.hidden_size = hidden_size
-        self.k_v_size = k_v_size
         self.softmax = nn.Softmax(dim=1)
 
         self.Q = nn.Linear(hidden_size, hidden_size)
@@ -222,7 +221,7 @@ class Decoder(nn.Module):
         self.embeddings = nn.Linear(pose_size, hidden_size)
         
         self.spacial_attention = nn.ModuleList([
-            SpacialAttention(k_v_size=self.hidden_size, hidden_size=self.hidden_size) 
+            SpacialAttention(hidden_size=self.hidden_size) 
             for i in range(self.num_layers)])
             
         self.temporal_attention = nn.ModuleList([
@@ -261,14 +260,13 @@ class Decoder(nn.Module):
 
                 x, h = self.cell(x, h_.squeeze(1))
                 H = torch.cat([H, h.unsqueeze(1)], dim=1)
+                s_all_attn.append(s_att_w)
+                t_all_attn.append(t_att_w)
                 
             else:
                 x, h = self.cell(x, h)
 
             Y.append(x.unsqueeze(1))         
-           
-            s_all_attn.append(s_att_w)
-            t_all_attn.append(t_att_w)
     
         return torch.cat(Y, dim=1)
 
@@ -292,13 +290,12 @@ class Decoder(nn.Module):
 
                 x, h = self.cell(x, h_.squeeze(1))
                 H = torch.cat([H, h.unsqueeze(1)], dim=1)
-                
+                s_all_attn.append(s_att_w)
+                t_all_attn.append(t_att_w)
             else:
                 x, h = self.cell(x, h)
 
             Y.append(x.unsqueeze(1))
-            s_all_attn.append(s_att_w)
-            t_all_attn.append(t_att_w)
 
         return torch.cat(Y, dim=1)
     
@@ -379,15 +376,14 @@ class DecoderCurriculum(nn.Module):
 
                 x, h = self.cell(x, h_.squeeze(1))
                 H = torch.cat([H, h.unsqueeze(1)], dim=1)
+                s_all_attn.append(s_att_w)
+                t_all_attn.append(t_att_w)
                 
             else:
                 x, h = self.cell(x, h)
 
             Y.append(x.unsqueeze(1))         
-           
-            s_all_attn.append(s_att_w)
-            t_all_attn.append(t_att_w)
-    
+
         return torch.cat(Y, dim=1)
 
 
@@ -415,13 +411,13 @@ class DecoderCurriculum(nn.Module):
 
                 x, h = self.cell(x, h_.squeeze(1))
                 H = torch.cat([H, h.unsqueeze(1)], dim=1)
+                s_all_attn.append(s_att_w)
+                t_all_attn.append(t_att_w)
                 
             else:
                 x, h = self.cell(x, h)
 
             Y.append(x.unsqueeze(1))
-            s_all_attn.append(s_att_w)
-            t_all_attn.append(t_att_w)
 
         return torch.cat(Y, dim=1)
     
