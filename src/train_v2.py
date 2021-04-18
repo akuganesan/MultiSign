@@ -84,9 +84,9 @@ def config_parser():
     parser.add_argument('--run_name', type=str,
                         help='name of the current experiment')
     parser.add_argument('--run_folder', type=str,
-                        help='folder to store run files', default="runs-best")
+                        help='folder to store run files', default="runs-FINAL")
     parser.add_argument('--model_path', type=str,
-                        help='where to store model checkpoints', default='model-best')
+                        help='where to store model checkpoints', default='model-FINAL')
     
     return parser
 
