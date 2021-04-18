@@ -1,16 +1,20 @@
 import torch
+import random
 import matplotlib
 import numpy as np
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
 import matplotlib.pyplot as plt
+
 import utils.constants as constants
 import utils.skel as skel
-
-
-from utils.skel import TB_vis_pose2D, prep_poses
-
 import utils.dataset as dataset
+import utils.visualize as vis
+
+from PIL import Image
+from torch.autograd import Variable
+from torchvision import transforms
+from torch.utils.tensorboard import SummaryWriter
+from utils.skel import TB_vis_pose2D, prep_poses
 
 def mean_prior(pred_pose, mean_pose):
     return
@@ -129,8 +133,6 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         return {
                 'loss': all_loss / len(dataloader) 
         }
-
-
     
 def basic_test(dataloader, encoder, decoder, device, num_joints=57, joint_dim=2, encoder_type='multi'):
     
@@ -183,4 +185,129 @@ def basic_test(dataloader, encoder, decoder, device, num_joints=57, joint_dim=2,
           
     return {
             'loss': all_loss / len(dataloader) 
+    }
+
+def endToEnd_test(dataloader, encoder, decoder, generator, device, num_joints=57, joint_dim=2, encoder_type='multi'):
+    
+    encoder.eval()
+    decoder.eval()
+    generator.eval()
+    
+    # preprocessing
+    TensortoPIL = transforms.ToPILImage()
+    PILtoTensor = transforms.ToTensor()
+        
+    all_loss = 0
+    MSE = torch.nn.MSELoss()
+    L1 = torch.nn.L1Loss()
+    l1 = 0
+    psnr = 0
+    count = 0
+    for i, data in enumerate(dataloader):
+        img_seq = torch.FloatTensor(data['img_seq'])
+        pose_seq = data['pose_seq'].to(device)
+        label_seq = data['label_seq'].to(device)
+        transl_eng = data['transl_eng']
+        transl_deu = data['transl_deu']
+        multilingual = data['multi']
+        img_seq_len = data['seq_len']
+
+        total_sequence = sum(np.array(img_seq_len))
+        delta = label_seq - pose_seq
+        
+        if encoder_type == 'multi':
+            encoder_input = multilingual
+        elif encoder_type == 'en':
+            encoder_input = transl_eng
+        else:
+            encoder_input = transl_deu
+
+        lang_embed = torch.FloatTensor(encoder(encoder_input)).to(device)
+
+        output = decoder.sample(lang_embed.to(device), max(img_seq_len), \
+                                 pose_seq.view(pose_seq.shape[0], pose_seq.shape[1], -1)[:,0,...].to(device),\
+                                 attn=None)
+            
+        packed = dataset.pack_sequence(output, np.array(img_seq_len))
+        pred_pose = packed.data.view(-1,num_joints*joint_dim)
+
+        packed_gt = dataset.pack_sequence(label_seq, np.array(img_seq_len))
+        gt_label = packed_gt.data.view(-1, num_joints*joint_dim)
+
+        pred_pose = skel.denormalize_pose(pred_pose.view(-1, num_joints, joint_dim).detach().cpu())
+        gt_label = skel.denormalize_pose(gt_label.view(-1, num_joints, joint_dim).detach().cpu())
+        loss = skel.calculate_batch_mpjpe(pred_pose, gt_label)
+                                
+        all_loss += loss.detach().cpu()
+        
+        for image, pred_pose, gt_pose in zip(img_seq.squeeze(0)[1:], pred_pose, gt_label):
+            # pred pose image
+            ax = plt.subplot()
+            plt.axis('off')
+            skel.plot_pose2D(ax, pred_pose)
+            ax.get_figure().canvas.draw()
+            a = Image.frombytes('RGB', ax.get_figure().canvas.get_width_height(),ax.get_figure().canvas.tostring_rgb())
+            ax.clear()
+            
+            # gt pose image
+            ax = plt.subplot()
+            plt.axis('off')
+            skel.plot_pose2D(ax, gt_pose)
+            ax.get_figure().canvas.draw()
+            gt_pose_img = Image.frombytes('RGB', ax.get_figure().canvas.get_width_height(), \
+                                          ax.get_figure().canvas.tostring_rgb())
+            ax.clear()            
+            
+            # target image
+            b = TensortoPIL(image)
+
+            # Preprocess pose image and target image
+            a = a.resize((286, 286), Image.BICUBIC)
+            b = b.resize((286, 286), Image.BICUBIC)
+            gt_pose_img = gt_pose_img.resize((286, 286), Image.BICUBIC)
+            a = transforms.ToTensor()(a)
+            b = transforms.ToTensor()(b)
+            gt_pose_img = transforms.ToTensor()(gt_pose_img)
+            w_offset = random.randint(0, max(0, 286 - 256 - 1))
+            h_offset = random.randint(0, max(0, 286 - 256 - 1))
+
+            a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+            b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+
+            a = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(a)
+            b = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(b)
+            gt_pose_img = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(gt_pose_img)
+
+            if random.random() < 0.5:
+                idx = [i for i in range(a.size(2) - 1, -1, -1)]
+                idx = torch.LongTensor(idx)
+                a = a.index_select(2, idx)
+                b = b.index_select(2, idx)
+                gt_pose_img = gt_pose_img.index_select(2, idx)
+                
+            a = a.unsqueeze(0)
+            b = b.unsqueeze(0)
+            gt_pose_img = gt_pose_img.unsqueeze(0)
+                
+            # input & target image data
+            x_ = Variable(a.cuda())
+            y_ = Variable(b.cuda())
+
+            gen_image = generator(x_)
+            gen_image = gen_image.cpu().data
+
+            l1 = l1 + L1(b, gen_image)
+            psnr = psnr + 20 * torch.log10(255.0 / torch.sqrt(MSE(b, gen_image)))
+
+            if i == 5:
+                # Show result for test data
+                vis.pose2video(encoder_input[0], gt_pose_img, b, a, gen_image, count, training=False, save=True, \
+                               save_dir='/scratch/abi/MultiSign/eval/')
+                print('%d images are generated.' % (count + 1))
+            count +=1
+       
+    return {
+            's2p loss': all_loss / len(dataloader),
+            'p2v l1 loss': l1/count,
+            'p2v psnr loss': psnr/count
     }

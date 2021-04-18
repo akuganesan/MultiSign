@@ -2,6 +2,7 @@ import re
 import os
 import glob
 import torch
+import random
 import numpy as np
 import pandas as pd
 import deepdish as dd
@@ -9,6 +10,8 @@ import utils.skel as skel
 import utils.constants as constants
 
 from PIL import Image
+from os import listdir
+from os.path import join
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
@@ -96,7 +99,6 @@ class SIGNUMDataset(Dataset):
         """
         valtest = [265, 691, 727, 181, 584, 225, 473, 561, 135, 241, 284, 14, 64, 187, 547, 118, 457, 436, 612, 27, 301, 48, 348, 93, 777, 576, 710, 100, 453, 150, 298, 482, 489, 95, 202, 329, 88, 4, 673, 706, 382, 190, 739, 619, 229, 11, 18, 179, 677, 446, 429, 297, 309, 318, 380, 687, 511, 557, 542, 543, 487, 139, 109, 775, 704, 264, 694, 196, 768, 703, 395, 111, 488, 683, 522, 349, 653, 652, 505, 384, 735, 253, 252, 130, 594, 426, 655, 175, 365, 285, 537, 497, 424, 751, 711, 663, 7, 302, 737, 102, 47, 1, 107, 400, 9, 292, 236, 249, 682, 112, 86, 288, 437, 145, 646, 636, 199, 606, 671, 300, 161, 240, 510, 598, 445, 144, 168, 478, 570, 476, 590, 140, 52, 391, 746, 116, 566, 114, 338, 60, 638, 779, 521, 314, 423, 535, 693, 174, 217, 486, 381, 695, 607, 454, 439, 388]
         
-        
         val = valtest[len(valtest)//2:]
         test = valtest[:len(valtest)//2]
         
@@ -134,8 +136,7 @@ class SIGNUMDataset(Dataset):
         
         self.transform = transforms.Compose([
             transforms.Resize([img_size,img_size]),
-            transforms.ToTensor(),
-            transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)
+            transforms.ToTensor()
         ]) 
         
         if speaker_id:
@@ -329,3 +330,81 @@ class SIGNUMDataset(Dataset):
                     multilingual,
                     sequence_length
                 ]
+
+        
+def is_image_file(filename):
+    return any(filename.endswith(extension) for extension in [".png", ".jpg", ".jpeg"])
+
+def load_img(filepath):
+    img = Image.open(filepath).convert('RGB')
+    img = img.resize((256, 256), Image.BICUBIC)
+    return img
+
+def save_img(image_tensor, filename):
+    image_numpy = image_tensor.float().numpy()
+    image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.0
+    image_numpy = image_numpy.clip(0, 255)
+    image_numpy = image_numpy.astype(np.uint8)
+    image_pil = Image.fromarray(image_numpy)
+    image_pil.save(filename)
+    print("Image saved as {}".format(filename))
+
+class Pose2VideoDataset(Dataset):
+    ''' 
+        Dataset for Pose2Video task
+        Subfolder a contains joint images
+        Subfolder b contains video frames
+    '''
+    def __init__(self, image_dir, direction):
+        super(Pose2VideoDataset, self).__init__()
+        self.direction = direction
+        self.a_path = join(image_dir, "a")
+        self.b_path = join(image_dir, "b")
+        self.image_filenames = [x for x in listdir(self.a_path) if is_image_file(x)]
+
+        transform_list = [transforms.ToTensor(),
+                          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+        self.transform = transforms.Compose(transform_list)
+
+    def __getitem__(self, index):
+        a = Image.open(join(self.a_path, self.image_filenames[index])).convert('RGB')
+        b = Image.open(join(self.b_path, self.image_filenames[index])).convert('RGB')
+        a = a.resize((286, 286), Image.BICUBIC)
+        b = b.resize((286, 286), Image.BICUBIC)
+        a = transforms.ToTensor()(a)
+        b = transforms.ToTensor()(b)
+        w_offset = random.randint(0, max(0, 286 - 256 - 1))
+        h_offset = random.randint(0, max(0, 286 - 256 - 1))
+    
+        a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+        b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+    
+        a = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(a)
+        b = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(b)
+
+        if random.random() < 0.5:
+            idx = [i for i in range(a.size(2) - 1, -1, -1)]
+            idx = torch.LongTensor(idx)
+            a = a.index_select(2, idx)
+            b = b.index_select(2, idx)
+
+        if self.direction == "a2b":
+            return a, b
+        else:
+            return b, a
+
+    def __len__(self):
+        return len(self.image_filenames)
+
+def get_training_set(root_dir, direction):
+    train_dir = join(root_dir, "train")
+    return Pose2VideoDataset(train_dir, direction)
+
+def get_validation_set(root_dir, direction):
+    val_dir = join(root_dir, "val")
+    return Pose2VideoDataset(val_dir, direction)
+
+def get_testing_set(root_dir, direction):
+    test_dir = join(root_dir, "test")
+    return Pose2VideoDataset(test_dir, direction)

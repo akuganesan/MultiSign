@@ -8,20 +8,21 @@ import matplotlib.pyplot as plt
 import utils.model as model
 import utils.dataset as dataset
 import utils.skel as skel
+import utils.visualize as vis
 from utils.utils import create_folder, save_args, save_configs, generate_unique_run_name
 import torch.optim as optim
 
 os.environ['TRANSFORMERS_CACHE'] = 'transformer_cache/'
-from utils.dataset import SIGNUMDataset
+from utils.dataset import SIGNUMDataset, Pose2VideoDataset
 from transformers import BertTokenizer, BertModel
 from torch.utils.data import Dataset, DataLoader
+from utils.model import Generator, ConvBlock, DeconvBlock
 
 from torch.utils.tensorboard import SummaryWriter
 
-from runner import basic_test
+from runner import basic_test, endToEnd_test
 
 import configargparse
-
 
 
 def config_parser():
@@ -29,7 +30,9 @@ def config_parser():
     
     # Which type of model to evaluate
     parser.add_argument('--encoder_type', type=str,
-                        help='type of language encoder')  
+                        help='type of language encoder')
+    parser.add_argument('--end_to_end', type=bool, default=True,
+                        help='whether or not to evaluate with gan')
 
     # Hyperparameters and Dataset
     parser.add_argument('--num_workers', type=int, default=2,
@@ -41,7 +44,6 @@ def config_parser():
     parser.add_argument('--speaker_id', type=int, default=11,
                         help='which speaker to run testing for')
     
-    
     # GPU Allocation
     parser.add_argument('--cuda_num', type=int, default=0,
                         help='which GPU to use if there are multiple available')
@@ -50,7 +52,9 @@ def config_parser():
     parser.add_argument('--run_num', type=int,
                         help='folder to store run files', default=0)
     parser.add_argument('--model_path', type=str,
-                        help='where to load model checkpoints', default='model-best')
+                        help='where to load model checkpoints', default='/scratch/datasets/lang2pose/model-best')
+    parser.add_argument('--generator_path', type=str, default='',
+                        help='generator checkpoint to load')
     
     return parser
 
@@ -64,6 +68,8 @@ if __name__ == "__main__":
     subsample = args.subsample
     encoder_type = args.encoder_type
     speaker_id = str(args.speaker_id)
+    generator_path = args.generator_path
+    end_to_end = args.end_to_end
     print('Running Evaluation for {} on Speaker {}'.format(encoder_type, speaker_id))
     
     run_num = args.run_num
@@ -84,8 +90,11 @@ if __name__ == "__main__":
     encoder = model.language_encoder(model_type=encoder_type)
     for param in encoder.parameters():
         param.requires_grad = False
-        
     encoder.eval()
+    
+    if end_to_end:
+        generator = torch.load(generator_path)
+        generator.eval()
     
     """SET THE MODEL NAME"""
     if encoder_type == "multi":
@@ -105,14 +114,18 @@ if __name__ == "__main__":
     decoder.load_state_dict(checkpoint["model_state_dict"])
     decoder.eval()
     
-   
-
     print('Starting Testing')
-    test_dict = basic_test(test_loader, encoder, decoder, device, encoder_type=encoder_type)
-    test_loss = test_dict['loss']
-
-    print("Loss on Testing Dataset after Epoch {} of Training = {}".format(checkpoint["epoch"], test_loss))
+    if end_to_end:
+        test_dict = endToEnd_test(test_loader, encoder, decoder, generator, device, encoder_type=encoder_type)
+        s2p_loss = test_dict['s2p loss']
+        p2v_l1_loss = test_dict['p2v l1 loss']
+        p2v_psnr_loss = test_dict['p2v psnr loss']
+        print("Loss on Testing Dataset after Epoch {} of Training = {}".format(checkpoint["epoch"], s2p_loss),
+              "L1 Loss: {}".format(p2v_l1_loss),
+              "PSNR Loss: {}".format(p2v_psnr_loss))
+    else:
+        test_dict = basic_test(test_loader, encoder, decoder, device, encoder_type=encoder_type)
+        test_loss = test_dict['loss']
+        print("Loss on Testing Dataset after Epoch {} of Training = {}".format(checkpoint["epoch"], test_loss))
 
     print('Finished Training')
-    
-    
