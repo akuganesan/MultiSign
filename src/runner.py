@@ -33,7 +33,7 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         if training:
             optimizer.zero_grad()
 
-        img_seq = torch.FloatTensor(data['img_seq'])
+#         img_seq = torch.FloatTensor(data['img_seq'])
         pose_seq = data['pose_seq'].to(device)
         label_seq = data['label_seq'].to(device)
         transl_eng = data['transl_eng']

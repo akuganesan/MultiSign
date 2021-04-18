@@ -128,9 +128,9 @@ if __name__ == "__main__":
                                                                                                                          subsample)))
 
     train_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample,\
-                                  training=True, normalize_poses=normalize_poses)
+                                  training=True, normalize_poses=normalize_poses, use_image=False)
     validation_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample,\
-                                       validation = True, normalize_poses=normalize_poses)
+                                       validation = True, normalize_poses=normalize_poses, use_image=False)
     
     print('Training Examples: {}'.format(len(train_dataset)))
     print('Validation Examples: {}'.format(len(validation_dataset)))
