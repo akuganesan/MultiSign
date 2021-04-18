@@ -60,7 +60,7 @@ def pytorch2pose(pose, dim1=776, dim2=578):
     return p
 
 # VISUALIZATION CODE
-def plot_pose2D(ax, pose_2d_1, bones=GLOBAL_BONES, linewidth=1, alpha=0.95, colormap='gist_rainbow', autoAxisRange=True):
+def plot_pose2D(ax, pose_2d_1, bones=GLOBAL_BONES, linewidth=1, alpha=0.95, colormap='gist_rainbow', autoAxisRange=True, gt=False):
     cmap = plt.get_cmap(colormap)
     pose_2d = pose_2d_1.clone()
     pose_2d = np.reshape(pose_2d.numpy().transpose(), (2, -1))
@@ -69,11 +69,16 @@ def plot_pose2D(ax, pose_2d_1, bones=GLOBAL_BONES, linewidth=1, alpha=0.95, colo
     XY = np.vstack([X, Y])
 
     maximum = len(bones)
-    
-    for i, bone in enumerate(bones):
-        colorIndex = cmap.N - cmap.N * i/float(maximum) # cmap.N - to start from back (nicer color)
-        color = cmap(int(colorIndex))
-        ax.plot(XY[0, bone], XY[1, bone], color=color, linewidth=linewidth, alpha=alpha, solid_capstyle='round')
+    if not gt:
+        for i, bone in enumerate(bones):
+            colorIndex = cmap.N - cmap.N * i/float(maximum) # cmap.N - to start from back (nicer color)
+            color = cmap(int(colorIndex))
+            ax.plot(XY[0, bone], XY[1, bone], color=color, linewidth=linewidth, alpha=alpha, solid_capstyle='round')
+    else:
+        for i, bone in enumerate(bones):
+            colorIndex = cmap.N - cmap.N * i/float(maximum) # cmap.N - to start from back (nicer color)
+            color = cmap(int(colorIndex))
+            ax.plot(XY[0, bone], XY[1, bone], color='black', linewidth=linewidth, alpha=alpha, solid_capstyle='round')
         
     # HARDCODED TO MATCH THE ORIGINAL IMAGE SIZE
     ax.set_xlim([-388,388])
@@ -106,12 +111,27 @@ def TB_vis_pose2D(packed, packed_gt, normalize):
         for i in range(plot_len):
             plot_pose2D(ax[i], pose_2d[i], colormap='gist_rainbow')
             plot_pose2D(ax[i], gt_2d[i], colormap='copper')
+            ax[i].axis('off')
     else:
         plot_len = min(len_gt, 20)
-        fig, ax = plt.subplots(1,plot_len)
+        fig, ax = plt.subplots(1,plot_len)        
         for i in range(plot_len):
             plot_pose2D(ax, pose_2d[i,...], colormap='gist_rainbow')
             plot_pose2D(ax, gt_2d[i,...], colormap='copper')
+            
+    return fig
+
+def TB_vis_pose2D_GT(packed, packed_gt, normalize):
+    pose_2d, gt_2d, len_pose, len_gt = prep_poses(packed, packed_gt, normalize=normalize)
+    
+    plot_len = min(len_gt, 20)
+    fig, ax = plt.subplots(1,plot_len)
+    fig.set_size_inches(plot_len*2, 2)
+
+    for i in range(plot_len):
+        plot_pose2D(ax[i], gt_2d[i], colormap='copper', gt=True)
+        ax[i].axis('off')
+            
     return fig
     
     

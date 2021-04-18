@@ -57,7 +57,7 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         lang_embed = torch.FloatTensor(encoder(encoder_input)).to(device)
 
         if training:
-            output = decoder(lang_embed, max(img_seq_len), pose_seq.view(pose_seq.shape[0], pose_seq.shape[1], -1),\
+            output = decoder(lang_embed, max(img_seq_len), label_seq.view(label_seq.shape[0], label_seq.shape[1], -1),\
                                   epoch=epoch)
         else:
             output = decoder.sample(lang_embed.to(device), max(img_seq_len), \
