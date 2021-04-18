@@ -16,7 +16,7 @@ def mean_prior(pred_pose, mean_pose):
     return
 
 def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device, training=True, \
-                num_joints=57, joint_dim=2, writer=None, update=15, denorm=False, use_attn=False,\
+                num_joints=57, joint_dim=2, writer=None, update=50, denorm=False, use_attn=False,\
                 normalize_poses=True, attention_value=1, encoder_type='multi'):
     print('normalize: ', normalize_poses)
     
