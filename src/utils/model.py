@@ -182,7 +182,7 @@ class Decoder(nn.Module):
         self.cell = DecoderCell(hidden_size, pose_size, trajectory_size,
                                 use_h=use_h, use_tp=use_tp, use_lang=use_lang)
         ## Hardcoded to reach 0% Teacher forcing in 20 epochs
-        self.tf = TeacherForcing(0.05)
+        self.tf = TeacherForcing(50)
         self.start_zero = start_zero
         self.use_lang = use_lang
         self.use_attn = use_attn
