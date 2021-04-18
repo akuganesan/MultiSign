@@ -213,20 +213,13 @@ class Decoder(nn.Module):
 
         Y = []
         H = h.unsqueeze(1)
-        for t in range(time_steps):
-            if self.use_lang:
-                if self.use_attn:  ### calculate temporat attention at each time-step
-                    H = self.attention(self.dropout(H))
-                x, h = self.cell(torch.cat([x, H[:, -1, :]], dim=-1), h)
-
-            else:
-                x, h = self.cell(x, h)
-            H = torch.cat((H, h.unsqueeze(1)), dim=1)
-            Y.append(x.unsqueeze(1))
-            if t > 0:
-                mask = self.tf(epoch, h.shape[0]).view(-1, 1).to(x.device)
+        
+        for t in range(time_steps): 
+            mask = self.tf(epoch, h.shape[0]).view(-1, 1).to(x.device)
 #                 mask = self.tf(epoch, h.shape[0]).double().view(-1, 1).to(x.device)
-                x = mask * gt[:, t-1, :] + (1-mask) * x
+            x = mask * gt[:, t, :] + (1-mask) * x            
+            x, h = self.cell(x, h)
+            Y.append(x.unsqueeze(1))
         return torch.cat(Y, dim=1)
 
     def sample(self, h, time_steps, start, attn=None):
