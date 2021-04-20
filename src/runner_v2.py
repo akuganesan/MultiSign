@@ -33,7 +33,7 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         if training:
             optimizer.zero_grad()
 
-        img_seq = torch.FloatTensor(data['img_seq'])
+#         img_seq = torch.FloatTensor(data['img_seq'])
         pose_seq = data['pose_seq'].to(device)
         label_seq = data['label_seq'].to(device)
         transl_eng = data['transl_eng']
@@ -44,7 +44,7 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         total_sequence = sum(np.array(img_seq_len))
         delta = label_seq - pose_seq
         
-        if encoder_type == 'multi':
+        if encoder_type in ['mbert', 'msbert']:
 #             print('multi')
             encoder_input = multilingual
         elif encoder_type == 'en':
@@ -140,3 +140,62 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         }
 
 
+def basic_test(dataloader, encoder, decoder, device, num_joints=57, joint_dim=2, encoder_type='multi'):
+    
+    encoder.eval()
+    decoder.eval()
+        
+    all_loss = 0
+    for i, data in enumerate(dataloader):
+#         if i == 2:
+#             break
+
+#         img_seq = torch.FloatTensor(data['img_seq'])
+        pose_seq = data['pose_seq'].to(device)
+        label_seq = data['label_seq'].to(device)
+        transl_eng = data['transl_eng']
+        transl_deu = data['transl_deu']
+        multilingual = data['multi']
+        img_seq_len = data['seq_len']
+
+        total_sequence = sum(np.array(img_seq_len))
+        delta = label_seq - pose_seq
+        
+        if encoder_type in ["mbert", "msbert"]:
+#             print('multi')
+            encoder_input = multilingual
+        elif encoder_type == 'en':
+#             print('en')
+            encoder_input = transl_eng
+        else:
+#             print('de')
+            encoder_input = transl_deu
+
+        bert_tokens = None
+        if encoder.bert_tokens:
+            lang_embed, bert_tokens = encoder(encoder_input)
+            lang_embed = torch.FloatTensor(lang_embed).to(device)
+            bert_tokens = torch.FloatTensor(bert_tokens).to(device)
+
+        else:
+            lang_embed = torch.FloatTensor(encoder(encoder_input)).to(device)
+
+        output = decoder.sample(lang_embed.to(device), max(img_seq_len), \
+                                 pose_seq.view(pose_seq.shape[0], pose_seq.shape[1], -1)[:,0,...].to(device),\
+                                 bert_tokens=bert_tokens)
+            
+        packed = dataset.pack_sequence(output, np.array(img_seq_len))
+        pred_pose = packed.data.view(-1,num_joints*joint_dim)
+
+        packed_gt = dataset.pack_sequence(label_seq, np.array(img_seq_len))
+        gt_label = packed_gt.data.view(-1, num_joints*joint_dim)
+
+        pred_pose = skel.denormalize_pose(pred_pose.view(-1, num_joints, joint_dim).detach().cpu())
+        gt_label = skel.denormalize_pose(gt_label.view(-1, num_joints, joint_dim).detach().cpu())
+        loss = skel.calculate_batch_mpjpe(pred_pose, gt_label)
+                                
+        all_loss += loss.detach().cpu()
+          
+    return {
+            'loss': all_loss / len(dataloader) 
+    }

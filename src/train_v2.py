@@ -46,7 +46,7 @@ def config_parser():
     parser.add_argument('--dataset_root', type=str,
                         help='path to the dataset', default='/scratch/datasets/SIGNUM')
     parser.add_argument('--encoder_type', type=str,
-                        help='type of language encoder', default='multi')
+                        help='type of language encoder', default='mbert')
     parser.add_argument('--decoder_attn', type=bool,
                         help='use attention in the decoder', default=False)
     parser.add_argument('--decoder_type', type=str,
@@ -54,6 +54,7 @@ def config_parser():
                         default="base")
     parser.add_argument('--decoder_num_layers', type=int, default=1,
                        help="number of attention heads")
+    parser.add_argument('--use_tf', type=bool, default=True, help="use teacher forcing")
     
     # Training
     parser.add_argument('--attn', dest='attn', action='store_true')
@@ -108,6 +109,7 @@ if __name__ == "__main__":
     decoder_attn = args.decoder_attn
     decoder_type = args.decoder_type
     decoder_num_layers = args.decoder_num_layers
+    use_tf = args.use_tf
     print('using normalized poses: ', normalize_poses)
     print('encoder type: ', encoder_type)
     
@@ -136,16 +138,21 @@ if __name__ == "__main__":
                                                                                                                          normalize_poses,
                                                                                                                          subsample)))
 
-    train_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample,\
-                                  training=True, normalize_poses=normalize_poses)
-    validation_dataset = SIGNUMDataset('/scratch/datasets/SIGNUM', use_pose=True, subsample=subsample,\
-                                       validation = True, normalize_poses=normalize_poses)
+    train_dataset = SIGNUMDataset(dataset_root, use_pose=True, subsample=subsample,\
+                                  training=True, normalize_poses=normalize_poses, use_image=False)
+    validation_dataset = SIGNUMDataset(dataset_root, use_pose=True, subsample=subsample,\
+                                       validation = True, normalize_poses=normalize_poses, use_image=False)
     
     print('Training Examples: {}'.format(len(train_dataset)))
     print('Validation Examples: {}'.format(len(validation_dataset)))
             
     # Initialize Models
     print('INITIALIZING MODELS')
+    
+    tf_epochs = total_epochs
+    if not use_tf:
+        tf_epochs = 1
+
     if decoder_attn:
         encoder = model.language_encoder(model_type=encoder_type, tokens=True)
     else:
@@ -155,13 +162,13 @@ if __name__ == "__main__":
         decoder = model.Decoder(hidden_size=768, pose_size=57*2, trajectory_size=0,
                                 use_h=False, start_zero=False, use_tp=False,
                                 use_lang=False, use_attn=decoder_attn,
-                                num_layers=decoder_num_layers, device=device, epoch=total_epochs).to(device)
+                                num_layers=decoder_num_layers, device=device, epoch=tf_epochs).to(device)
 
     elif decoder_type == "curriculum":
         decoder = model.DecoderCurriculum(hidden_size=768, pose_size=57*2, trajectory_size=0,
                                         use_h=False, start_zero=False, use_tp=False,
                                         use_lang=False, use_attn=decoder_attn,
-                                        num_layers=decoder_num_layers, device=device, epoch=total_epochs).to(device)  
+                                        num_layers=decoder_num_layers, device=device, epoch=tf_epochs).to(device)  
     else:
         raise ValueError("Unsupported decoder type: {}".format(decoder_type))
 

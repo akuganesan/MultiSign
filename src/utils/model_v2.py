@@ -12,14 +12,19 @@ from transformers import BertTokenizer, BertModel
 from transformers import AutoTokenizer, AutoModel
 from torch.nn.utils.rnn import pad_sequence
 
-BERT_MODELS = {"multi" : {"model_name": "bert-base-multilingual-cased",
+
+BERT_MODELS = {"mbert" : {"model_name": "bert-base-multilingual-cased",
                           "tokenizer": "bert-base-multilingual-cased"}, 
+                          
+              "msbert" : {"model_name": "DeepPavlov/bert-base-multilingual-cased-sentence",
+              "tokenizer": "bert-base-multilingual-cased"}, 
                
                "en" :    {"model_name": "bert-base-cased",
                           "tokenizer": "bert-base-cased"},
                
                "de" :    {"model_name": "bert-base-german-cased",
                           "tokenizer": "bert-base-german-cased"}}
+
 
 class language_encoder(nn.Module):
     def __init__(self, model_path=None, model_type="multi", tokens=False):

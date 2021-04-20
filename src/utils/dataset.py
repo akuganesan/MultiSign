@@ -263,7 +263,7 @@ class SIGNUMDataset(Dataset):
         return torch.stack(sequence, dim=0), len(sequence)
     
     def __len__(self):
-        return len(self.sentence_folders)
+        return len(self.pose_paths)
 
     def __getitem__(self, idx):
         image_folder = self.sentence_folders[idx]
@@ -278,7 +278,7 @@ class SIGNUMDataset(Dataset):
             multilingual = sentence_annotation['transl_deu']
         
         # make sure images and poses are coming from the same sentence
-        assert image_folder.split('/')[-1] == pose_folder.split('/')[-1][:-3], 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder) 
+        # assert image_folder.split('/')[-1] == pose_folder.split('/')[-1][:-3], 'pose seq: {}  img seq: {}'.format(image_folder, pose_folder) 
         
         if self.use_image:
             image_sequence, sequence_length = self._load_image_sequence(sequence_paths)
