@@ -50,7 +50,7 @@ def basic_train(epoch, dataloader, encoder, decoder, optimizer, loss_fn, device,
         
         if encoder_type == 'multi':
 #             print('multi')
-            encoder_input = multilingual
+            encoder_input = transl_deu
         elif encoder_type == 'en':
 #             print('en')
             encoder_input = transl_eng
@@ -216,7 +216,7 @@ def endToEnd_test(dataloader, encoder, decoder, generator, device, num_joints=57
         delta = label_seq - pose_seq
         
         if encoder_type == 'multi':
-            encoder_input = multilingual
+            encoder_input = transl_eng
         elif encoder_type == 'en':
             encoder_input = transl_eng
         else:
@@ -298,12 +298,24 @@ def endToEnd_test(dataloader, encoder, decoder, generator, device, num_joints=57
 
             l1 = l1 + L1(b, gen_image)
             psnr = psnr + 20 * torch.log10(255.0 / torch.sqrt(MSE(b, gen_image)))
+            
+            # print gen_image and target image to file
+            data_dir = '/scratch/abi/MultiSign/evaluations/mBERT/'
+            pred = gen_image.clone()
+            gt = b.clone()
+            pred = (((pred[0] - pred[0].min()) * 255) / (pred[0].max() - pred[0].min())).numpy().transpose(1, 2, 0).astype(np.uint8)
+            gt = (((gt[0] - gt[0].min()) * 255) / (gt[0].max() - gt[0].min())).numpy().transpose(1, 2, 0).astype(np.uint8)
+            pred = Image.fromarray(pred)
+            gt = Image.fromarray(gt)
+            pred.save(data_dir + 'pred/{:d}.jpg'.format(count))
+            gt.save(data_dir + 'gt/{:d}.jpg'.format(count))
 
-            if i == 5:
-                # Show result for test data
-                vis.pose2video(encoder_input[0], gt_pose_img, b, a, gen_image, count, training=False, save=True, \
-                               save_dir='/scratch/abi/MultiSign/eval/')
-                print('%d images are generated.' % (count + 1))
+            
+#             if i == 5:
+#                 # Show result for test data
+#                 vis.pose2video(encoder_input[0], gt_pose_img, b, a, gen_image, count, training=False, save=True, \
+#                                save_dir='/scratch/abi/MultiSign/eval/')
+#                 print('%d images are generated.' % (count + 1))
             count +=1
        
     return {

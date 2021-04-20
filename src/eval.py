@@ -52,7 +52,7 @@ def config_parser():
     parser.add_argument('--run_num', type=int,
                         help='folder to store run files', default=0)
     parser.add_argument('--model_path', type=str,
-                        help='where to load model checkpoints', default='/scratch/datasets/lang2pose/model-best')
+                        help='where to load model checkpoints', default='/scratch/datasets/lang2pose/model-final/')
     parser.add_argument('--generator_path', type=str, default='',
                         help='generator checkpoint to load')
     
@@ -101,6 +101,8 @@ if __name__ == "__main__":
         model_name = "multi_run={}".format(run_num)
     elif encoder_type == "en":
         model_name = "english_run={}".format(run_num)
+    elif encoder_type =="ms":
+        model_name = "MSBERT_run={}".format(run_num)
     else: # encoder_type == "de"
         model_name = "german_run={}".format(run_num)
         

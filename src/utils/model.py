@@ -17,6 +17,9 @@ BERT_MODELS = {"multi" : {"model_name": "bert-base-multilingual-cased",
                "en" :    {"model_name": "bert-base-cased",
                           "tokenizer": "bert-base-cased"},
                
+               "ms" :    {"model_name": "DeepPavlov/bert-base-multilingual-cased-sentence",
+                          "tokenizer": "DeepPavlov/bert-base-multilingual-cased-sentence"},
+               
                "de" :    {"model_name": "bert-base-german-cased",
                           "tokenizer": "bert-base-german-cased"}}
 
